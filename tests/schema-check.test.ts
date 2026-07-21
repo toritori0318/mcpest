@@ -70,6 +70,18 @@ describe("スキーマ方言", () => {
     expect(checkSchema({ type: "string" }, "text")).toEqual({ ok: true });
   });
 
+  it("draft-07 の $schema 宣言つきスキーマを受理する（TypeScript SDK の zod-to-json-schema が生成する形式）", () => {
+    const schema = {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      type: "object",
+      properties: { text: { type: "string" } },
+      required: ["text"],
+      additionalProperties: false,
+    };
+    expect(checkSchema(schema, { text: "hi" })).toEqual({ ok: true });
+    expect(checkSchema(schema, { text: 1 }).ok).toBe(false);
+  });
+
   it("スキーマ自体が不正な場合はエラー扱い（例外を投げない）", () => {
     const result = checkSchema({ type: "no-such-type" }, "x");
     expect(result.ok).toBe(false);
