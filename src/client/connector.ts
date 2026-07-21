@@ -81,9 +81,10 @@ export async function connect(
     });
     transport = stdioTransport;
   } else {
+    // exactOptionalPropertyTypes と SDK 型定義の相性問題のためキャストする
     transport = new StreamableHTTPClientTransport(new URL(config.url), {
       requestInit: { headers: config.headers },
-    });
+    }) as unknown as Transport;
   }
 
   instrument(transport, trace);
@@ -112,15 +113,16 @@ export async function connect(
   }
 
   const serverVersion = client.getServerVersion();
+  const negotiated = trace.findNegotiatedProtocolVersion();
 
   return {
     client,
     trace,
-    ...(trace.findNegotiatedProtocolVersion() !== undefined
-      ? { protocolVersion: trace.findNegotiatedProtocolVersion() }
+    ...(negotiated !== undefined ? { protocolVersion: negotiated } : {}),
+    ...(serverVersion?.name !== undefined ? { serverName: String(serverVersion.name) } : {}),
+    ...(serverVersion?.version !== undefined
+      ? { serverVersion: String(serverVersion.version) }
       : {}),
-    ...(serverVersion?.name !== undefined ? { serverName: serverVersion.name } : {}),
-    ...(serverVersion?.version !== undefined ? { serverVersion: serverVersion.version } : {}),
     close: async () => {
       // MCP 仕様の shutdown: stdio はトランスポート close（stdin クローズ→SIGTERM→SIGKILL は
       // SDK の StdioClientTransport.close が担う）。HTTP は接続クローズのみ。
