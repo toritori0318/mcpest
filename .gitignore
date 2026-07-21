@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.mcpest/
+*.log
+.DS_Store

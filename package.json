@@ -1,0 +1,47 @@
+{
+  "name": "mcpest",
+  "version": "0.0.1",
+  "description": "A delightful test runner for MCP (Model Context Protocol) servers — declarative YAML tests, schema validation, and snapshot-based drift detection",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "mcpest": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "test",
+    "test-runner",
+    "testing",
+    "cli"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.15.0",
+    "ajv": "^8.17.1",
+    "commander": "^14.0.0",
+    "glob": "^11.0.0",
+    "jest-diff": "^30.0.0",
+    "picocolors": "^1.1.1",
+    "yaml": "^2.8.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}
