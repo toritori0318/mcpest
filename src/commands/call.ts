@@ -1,7 +1,8 @@
 /**
- * `mcpest call <server> <tool>` — 単発呼び出し。Inspector CLI の代替となる開発中の即席確認用。
- * isError:true は「正常に観察できたツール実行エラー」なので exit 0、
- * JSON-RPC エラー（未知ツール等）は exit 1、設定・接続エラーは exit 2。
+ * `mcpest call <server> <tool>` — one-shot tool invocation for quick checks
+ * during development (a CLI replacement for poking around in Inspector).
+ * isError:true is "a tool execution error observed successfully", so it exits 0;
+ * JSON-RPC errors (unknown tool etc.) exit 1; config/connection errors exit 2.
  */
 import { CallToolResultSchema, McpError } from "@modelcontextprotocol/sdk/types.js";
 import { connect, ConnectionError } from "../client/connector.js";
@@ -33,7 +34,7 @@ export async function callCommand(options: CallCommandOptions): Promise<number> 
   const config = servers.find((s) => s.name === options.serverName);
   if (!config) {
     process.stderr.write(
-      `サーバー "${options.serverName}" は設定にありません。利用可能: ${servers.map((s) => s.name).join(", ")}\n`,
+      `server "${options.serverName}" not found in config. Available: ${servers.map((s) => s.name).join(", ")}\n`,
     );
     return 2;
   }
@@ -43,7 +44,7 @@ export async function callCommand(options: CallCommandOptions): Promise<number> 
     try {
       args = JSON.parse(options.argsJson) as Record<string, unknown>;
     } catch {
-      process.stderr.write(`--args が JSON としてパースできません: ${options.argsJson}\n`);
+      process.stderr.write(`--args is not valid JSON: ${options.argsJson}\n`);
       return 2;
     }
   }
@@ -69,7 +70,7 @@ export async function callCommand(options: CallCommandOptions): Promise<number> 
     return 0;
   } catch (error) {
     if (error instanceof McpError) {
-      process.stderr.write(`JSON-RPC エラー: code=${error.code} ${error.message}\n`);
+      process.stderr.write(`JSON-RPC error: code=${error.code} ${error.message}\n`);
       return 1;
     }
     throw error;

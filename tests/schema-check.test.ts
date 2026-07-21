@@ -21,12 +21,12 @@ const weatherOutputSchema = {
   required: ["temperature", "conditions", "humidity"],
 } as const;
 
-describe("inputSchema 検証", () => {
-  it("適合する args はパス", () => {
+describe("inputSchema validation", () => {
+  it("conforming args pass", () => {
     expect(checkSchema(weatherInputSchema, { location: "Tokyo" })).toEqual({ ok: true });
   });
 
-  it("required 欠落は失敗し、欠けたキー名がエラーに含まれる", () => {
+  it("a missing required key fails and the error names the key", () => {
     const result = checkSchema(weatherInputSchema, {});
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -34,20 +34,20 @@ describe("inputSchema 検証", () => {
     }
   });
 
-  it("型違いは失敗", () => {
+  it("a type mismatch fails", () => {
     const result = checkSchema(weatherInputSchema, { location: 123 });
     expect(result.ok).toBe(false);
   });
 });
 
-describe("outputSchema 検証", () => {
-  it("適合する structuredContent はパス", () => {
+describe("outputSchema validation", () => {
+  it("conforming structuredContent passes", () => {
     expect(
       checkSchema(weatherOutputSchema, { temperature: 22.5, conditions: "Sunny", humidity: 65 }),
     ).toEqual({ ok: true });
   });
 
-  it("不適合（型違い）は失敗", () => {
+  it("non-conforming content (type mismatch) fails", () => {
     const result = checkSchema(weatherOutputSchema, {
       temperature: "very hot",
       conditions: "Sunny",
@@ -56,8 +56,8 @@ describe("outputSchema 検証", () => {
   });
 });
 
-describe("スキーマ方言", () => {
-  it("draft 2020-12 の $schema 宣言つきスキーマを受理する", () => {
+describe("schema dialects", () => {
+  it("accepts schemas declaring draft 2020-12", () => {
     const schema = {
       $schema: "https://json-schema.org/draft/2020-12/schema",
       type: "object",
@@ -66,11 +66,11 @@ describe("スキーマ方言", () => {
     expect(checkSchema(schema, { n: 1 })).toEqual({ ok: true });
   });
 
-  it("$schema 宣言なしのスキーマも受理する（MCP の inputSchema は宣言を持たないことが多い）", () => {
+  it("accepts schemas without a $schema declaration (common for MCP inputSchema)", () => {
     expect(checkSchema({ type: "string" }, "text")).toEqual({ ok: true });
   });
 
-  it("draft-07 の $schema 宣言つきスキーマを受理する（TypeScript SDK の zod-to-json-schema が生成する形式）", () => {
+  it("accepts schemas declaring draft-07 (what the TypeScript SDK's zod-to-json-schema emits)", () => {
     const schema = {
       $schema: "http://json-schema.org/draft-07/schema#",
       type: "object",
@@ -82,7 +82,7 @@ describe("スキーマ方言", () => {
     expect(checkSchema(schema, { text: 1 }).ok).toBe(false);
   });
 
-  it("スキーマ自体が不正な場合はエラー扱い（例外を投げない）", () => {
+  it("treats an invalid schema as a failure (never throws)", () => {
     const result = checkSchema({ type: "no-such-type" }, "x");
     expect(result.ok).toBe(false);
   });

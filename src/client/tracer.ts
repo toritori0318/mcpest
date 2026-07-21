@@ -1,8 +1,8 @@
 /**
- * JSON-RPC 全往復のインメモリ記録と JSONL 書き出し。
- * トレースは「失敗したとき、何を送って何が返ったかを丸ごと見られる」ための機能。
- * secrets（env や headers の値）は書き出し時に *** へ置換する——
- * トレースファイルは CI のアーティファクトとして共有されがちなため。
+ * In-memory recording of every JSON-RPC message, written out as JSONL.
+ * Traces exist so that "when a test fails, you can see exactly what was sent
+ * and what came back". Secrets (env / header values) are replaced with ***
+ * at write time — trace files tend to be shared as CI artifacts.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
@@ -18,7 +18,7 @@ export class TraceRecorder {
   private secrets: string[] = [];
 
   setSecrets(values: string[]): void {
-    // 短すぎる値のマスクは誤爆が多いので 4 文字以上のみ対象
+    // Masking very short values causes false positives, so only mask >= 4 chars
     this.secrets = values.filter((v) => v.length >= 4);
   }
 
@@ -26,7 +26,7 @@ export class TraceRecorder {
     this.entries.push({ dir, ts: new Date().toISOString(), message });
   }
 
-  /** これまでの全エントリを JSONL で書き出す（secrets はマスク） */
+  /** Write all entries so far as JSONL (secrets masked) */
   writeTo(path: string): void {
     mkdirSync(dirname(path), { recursive: true });
     const lines = this.entries.map((e) => {
@@ -39,7 +39,7 @@ export class TraceRecorder {
     writeFileSync(path, `${lines.join("\n")}\n`);
   }
 
-  /** initialize レスポンスからネゴシエートされたプロトコルバージョンを拾う */
+  /** Extract the negotiated protocol version from the initialize response */
   findNegotiatedProtocolVersion(): string | undefined {
     for (const e of this.entries) {
       if (e.dir !== "recv") continue;

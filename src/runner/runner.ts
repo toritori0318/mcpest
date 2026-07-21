@@ -1,7 +1,8 @@
 /**
- * 実行オーケストレーション。サーバー間は並列（上限 4）、同一サーバー内のテストは
- * 定義順に直列・接続再利用。テスト独立性より速度と「サーバー実装のステートフルな
- * 呼び出し列をそのまま検証できること」を優先する（設計書 §14 参照）。
+ * Execution orchestration. Servers run in parallel (capped at 4); tests within
+ * a server run sequentially in definition order over a reused connection.
+ * Speed and the ability to test stateful call sequences are prioritized over
+ * per-test isolation (see design doc §14).
  */
 import { join } from "node:path";
 import {
@@ -29,9 +30,9 @@ export interface RunOptions {
   cwd: string;
   configPath?: string;
   globs?: string[];
-  /** 対象サーバー名でのフィルタ */
+  /** Restrict to a single server name */
   server?: string;
-  /** テスト name の部分一致フィルタ */
+  /** Substring filter on test names */
   grep?: string;
   bail?: boolean;
   updateSnapshots?: boolean;
@@ -44,9 +45,9 @@ const MAX_LIST_PAGES = 50;
 const SERVER_CONCURRENCY = 4;
 
 interface ExpectParts {
-  /** JSON-RPC エラー照合（expect 最上位の error キー） */
+  /** JSON-RPC error matching (the top-level error key of expect) */
   error?: unknown;
-  /** それ以外の結果照合 */
+  /** Everything else, matched against the result */
   result?: unknown;
 }
 
@@ -73,7 +74,7 @@ async function fetchAllTools(connection: Connection): Promise<Tool[]> {
     if (result.nextCursor === undefined) return tools;
     cursor = result.nextCursor;
   }
-  throw new Error(`tools/list のページングが ${MAX_LIST_PAGES} ページを超えました`);
+  throw new Error(`tools/list pagination exceeded ${MAX_LIST_PAGES} pages`);
 }
 
 async function runSingleTest(
@@ -104,19 +105,19 @@ async function runSingleTest(
     if (!tool) {
       failures.push({
         path: "tool",
-        message: `ツール "${test.tool}" が見つかりません。利用可能: ${tools.map((t) => t.name).join(", ")}`,
+        message: `tool "${test.tool}" not found. Available: ${tools.map((t) => t.name).join(", ")}`,
       });
       return done("failed");
     }
 
-    // 入力自動検証: テストの書き間違いをサーバー呼び出し前に検知する
+    // Input auto-validation: catch test typos before calling the server
     if (test.validateInput && tool.inputSchema) {
       const check = checkSchema(tool.inputSchema, test.args);
       if (!check.ok) {
         schemaChecks.push({ kind: "input", ok: false, errors: check.errors });
         failures.push({
           path: "args",
-          message: `args が inputSchema に適合しません: ${check.errors.join(" / ")}`,
+          message: `args do not conform to inputSchema: ${check.errors.join(" / ")}`,
         });
         return done("failed");
       }
@@ -124,8 +125,9 @@ async function runSingleTest(
     }
 
     try {
-      // 高レベル callTool ではなく低レベル request を使うのは、SDK 側の
-      // outputSchema 検証（例外化）を避けて mcpest 自身の検証でメッセージを制御するため
+      // Use the low-level request instead of the high-level callTool so the
+      // SDK's own outputSchema validation (which throws) does not preempt
+      // mcpest's ajv validation and its better failure messages
       actual = await connection.client.request(
         { method: "tools/call", params: { name: test.tool, arguments: test.args } },
         CallToolResultSchema,
@@ -135,7 +137,7 @@ async function runSingleTest(
       if (error instanceof McpError && error.code === ErrorCode.RequestTimeout) {
         failures.push({
           path: "",
-          message: `タイムアウト: ${test.timeoutMs}ms 以内に応答がありませんでした (timeout)`,
+          message: `timeout: no response within ${test.timeoutMs}ms`,
         });
         return done("failed");
       }
@@ -152,39 +154,40 @@ async function runSingleTest(
         }
         failures.push({
           path: "",
-          message: `JSON-RPC エラー: code=${error.code} ${error.message}`,
+          message: `JSON-RPC error: code=${error.code} ${error.message}`,
         });
         return done("failed");
       }
       throw error;
     }
 
-    // error 照合を書いたテストで正常応答が返った場合は失敗
+    // A test that matches on error must fail if the response was successful
     if (expectError !== undefined) {
       failures.push({
         path: "error",
-        message: "JSON-RPC エラーを期待しましたが、正常応答が返りました",
+        message: "expected a JSON-RPC error, but received a successful response",
       });
       return done("failed");
     }
 
-    // MCP 仕様上、成功時の isError は省略可。ユーザーが isError: false と
-    // 自然に書けるよう、欠落を false に正規化してから照合する
+    // The MCP spec allows omitting isError on success. Normalize the omission
+    // to false so users can naturally write `isError: false`
     actual = { isError: false, ...(actual as Record<string, unknown>) };
 
-    // 出力自動検証: outputSchema があれば structuredContent の適合を必須とする（仕様の MUST）
+    // Output auto-validation: when outputSchema is declared, a conforming
+    // structuredContent is a server-side MUST in the MCP spec
     const callResult = actual as { structuredContent?: unknown; isError?: boolean };
     if (test.validateOutput && tool.outputSchema && callResult.isError !== true) {
       if (callResult.structuredContent === undefined) {
         schemaChecks.push({
           kind: "output",
           ok: false,
-          errors: ["outputSchema が宣言されていますが structuredContent がありません"],
+          errors: ["outputSchema is declared but structuredContent is missing"],
         });
         failures.push({
           path: "structuredContent",
           message:
-            "outputSchema が宣言されていますが structuredContent がありません（MCP 仕様のサーバー側 MUST 違反）",
+            "outputSchema is declared but structuredContent is missing (violates a server MUST in the MCP spec)",
         });
       } else {
         const check = checkSchema(tool.outputSchema, callResult.structuredContent);
@@ -192,7 +195,7 @@ async function runSingleTest(
           schemaChecks.push({ kind: "output", ok: false, errors: check.errors });
           failures.push({
             path: "structuredContent",
-            message: `structuredContent が outputSchema に適合しません: ${check.errors.join(" / ")}`,
+            message: `structuredContent does not conform to outputSchema: ${check.errors.join(" / ")}`,
           });
         } else {
           schemaChecks.push({ kind: "output", ok: true });
@@ -204,13 +207,14 @@ async function runSingleTest(
   if (expectResult !== undefined) {
     failures.push(...evaluate(expectResult, actual));
   } else if (test.method === "tools/call" && expectError === undefined) {
-    // expect 省略時の既定検証: ツール実行エラーでないこと（設計書 §4.2）
+    // Default check when expect is omitted: the tool must not report an
+    // execution error (design doc §4.2)
     const { isError } = actual as { isError?: boolean };
     if (isError === true) {
       const content = (actual as { content?: unknown }).content;
       failures.push({
         path: "isError",
-        message: `ツールが実行エラー（isError: true）を返しました: ${JSON.stringify(content)}`,
+        message: `tool returned an execution error (isError: true): ${JSON.stringify(content)}`,
       });
     }
   }
@@ -220,13 +224,14 @@ async function runSingleTest(
     if (snap.status === "mismatched") {
       failures.push({
         path: "(snapshot)",
-        message: `スナップショットと一致しません（更新するには -u）`,
+        message: "does not match the stored snapshot (run with -u to update)",
         ...(snap.diff !== undefined ? { diff: snap.diff } : {}),
       });
     } else if (snap.status === "missing") {
       failures.push({
         path: "(snapshot)",
-        message: "CI モードのためスナップショットの新規作成を失敗として扱います（ローカルで生成してコミットしてください）",
+        message:
+          "missing snapshot is treated as a failure in CI mode (generate it locally and commit it)",
       });
     }
   }
@@ -264,9 +269,7 @@ async function runServer(
         test,
         status: "error" as const,
         durationMs: 0,
-        failures: [
-          { path: "", message: "サーバーへの接続に失敗したため実行されませんでした" },
-        ],
+        failures: [{ path: "", message: "not executed because the server connection failed" }],
         schemaChecks: [],
       })),
     };
@@ -334,7 +337,7 @@ async function runServer(
   return { server: config.name, connection: connectionInfo(), results };
 }
 
-/** 上限つき並列実行 */
+/** Bounded-concurrency execution */
 async function withConcurrency<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<T[]> {
   const results: T[] = new Array(tasks.length);
   let index = 0;

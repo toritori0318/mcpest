@@ -1,15 +1,15 @@
 /**
- * expect 木の評価器。expect の値を実データと再帰比較し、失敗を全件収集する。
- * `$` で始まるキーのみを持つオブジェクトはマッチャとして解釈する。
- * マッチャでないオブジェクトは部分一致（expect に書いたキーのみ検証）。
+ * Evaluator for expect trees. Recursively compares expected values against
+ * actual data, collecting every failure (it never stops at the first one).
+ * An object whose keys all start with `$` is interpreted as a matcher.
+ * Non-matcher objects match partially (only the keys written are checked)
+ * so that YAML tests can mix literals and the DSL without extra syntax.
  */
 
 export interface MatchFailure {
   path: string;
   message: string;
 }
-
-type Json = unknown;
 
 const MATCHER_KEYS = new Set([
   "$type",
@@ -36,7 +36,7 @@ function isMatcher(value: unknown): value is Record<string, unknown> {
 
 function show(value: unknown): string {
   const s = JSON.stringify(value);
-  // undefined は JSON.stringify で消えるため明示する
+  // JSON.stringify drops undefined, so spell it out
   return s === undefined ? "undefined" : s;
 }
 
@@ -63,7 +63,7 @@ function joinPath(parent: string, key: string | number): string {
   return parent === "" ? String(key) : `${parent}.${key}`;
 }
 
-/** 数値比較演算子群（$length の内側と値そのものの両方で使う） */
+/** Numeric comparison operators (used both inside $length and on values) */
 function evaluateNumericOps(
   ops: Record<string, unknown>,
   actual: number,
@@ -82,13 +82,13 @@ function evaluateNumericOps(
     if (op in ops) {
       const bound = ops[op];
       if (typeof bound !== "number") {
-        failures.push({ path, message: `${op} の指定値が数値ではありません: ${show(bound)}` });
+        failures.push({ path, message: `${op} bound is not a number: ${show(bound)}` });
         continue;
       }
       if (!cmp(actual, bound)) {
         failures.push({
           path,
-          message: `${subject} ${actual} が ${op}: ${bound} を満たしません`,
+          message: `${subject} ${actual} does not satisfy ${op}: ${bound}`,
         });
       }
     }
@@ -101,11 +101,14 @@ function evaluateMatcher(
   path: string,
   failures: MatchFailure[],
 ): void {
-  // $any / $absent はキー存在の検証なので親（evaluateNode のオブジェクト分岐）で
-  // 処理済み。ここに到達するのは「キーが存在した」場合のみ。
+  // $any / $absent verify key presence, which the parent (the object branch of
+  // evaluateNode) already handled. Reaching here means the key exists.
   if (matcher["$any"] === true) return;
   if (matcher["$absent"] === true) {
-    failures.push({ path, message: `キーが存在しないことを期待しましたが、値 ${show(actual)} が存在します` });
+    failures.push({
+      path,
+      message: `expected key to be absent, but found ${show(actual)}`,
+    });
     return;
   }
 
@@ -113,16 +116,25 @@ function evaluateMatcher(
     const expected = matcher["$type"];
     const actualType = typeOf(actual);
     if (actualType !== expected) {
-      failures.push({ path, message: `型 ${String(expected)} を期待しましたが ${actualType}（${show(actual)}）でした` });
+      failures.push({
+        path,
+        message: `expected type ${String(expected)}, received ${actualType} (${show(actual)})`,
+      });
     }
   }
 
   if ("$regex" in matcher) {
     const pattern = String(matcher["$regex"]);
     if (typeof actual !== "string") {
-      failures.push({ path, message: `$regex は文字列にのみ適用できます（実際値: ${show(actual)}）` });
+      failures.push({
+        path,
+        message: `$regex can only be applied to strings (received: ${show(actual)})`,
+      });
     } else if (!new RegExp(pattern).test(actual)) {
-      failures.push({ path, message: `/${pattern}/ にマッチしません（実際値: ${show(actual)}）` });
+      failures.push({
+        path,
+        message: `does not match /${pattern}/ (received: ${show(actual)})`,
+      });
     }
   }
 
@@ -130,23 +142,29 @@ function evaluateMatcher(
     const needle = matcher["$contains"];
     if (typeof actual === "string") {
       if (typeof needle !== "string" || !actual.includes(needle)) {
-        failures.push({ path, message: `${show(needle)} を含みません（実際値: ${show(actual)}）` });
+        failures.push({
+          path,
+          message: `does not contain ${show(needle)} (received: ${show(actual)})`,
+        });
       }
     } else if (Array.isArray(actual)) {
       const hit = actual.some(
         (item) =>
           deepEqual(item, needle) ||
-          // content 配列特例: item.text への部分一致
+          // content-array special case: substring match against item.text
           (typeof needle === "string" &&
             isPlainObject(item) &&
             typeof item["text"] === "string" &&
             item["text"].includes(needle)),
       );
       if (!hit) {
-        failures.push({ path, message: `配列に ${show(needle)} を含む要素がありません` });
+        failures.push({ path, message: `no array element contains ${show(needle)}` });
       }
     } else {
-      failures.push({ path, message: `$contains は文字列か配列にのみ適用できます（実際値: ${show(actual)}）` });
+      failures.push({
+        path,
+        message: `$contains can only be applied to strings or arrays (received: ${show(actual)})`,
+      });
     }
   }
 
@@ -155,22 +173,28 @@ function evaluateMatcher(
     const len =
       typeof actual === "string" || Array.isArray(actual) ? actual.length : undefined;
     if (len === undefined) {
-      failures.push({ path, message: `$length は文字列か配列にのみ適用できます（実際値: ${show(actual)}）` });
+      failures.push({
+        path,
+        message: `$length can only be applied to strings or arrays (received: ${show(actual)})`,
+      });
     } else if (typeof spec === "number") {
       if (len !== spec) {
-        failures.push({ path, message: `長さ ${spec} を期待しましたが ${len} でした` });
+        failures.push({ path, message: `expected length ${spec}, received ${len}` });
       }
     } else if (isPlainObject(spec)) {
-      evaluateNumericOps(spec, len, path, failures, "長さ");
+      evaluateNumericOps(spec, len, path, failures, "length");
     }
   }
 
   const hasNumericOp = ["$gte", "$lte", "$gt", "$lt"].some((op) => op in matcher);
   if (hasNumericOp) {
     if (typeof actual !== "number") {
-      failures.push({ path, message: `数値比較は数値にのみ適用できます（実際値: ${show(actual)}）` });
+      failures.push({
+        path,
+        message: `numeric comparison can only be applied to numbers (received: ${show(actual)})`,
+      });
     } else {
-      evaluateNumericOps(matcher, actual, path, failures, "値");
+      evaluateNumericOps(matcher, actual, path, failures, "value");
     }
   }
 }
@@ -188,13 +212,16 @@ function evaluateNode(
 
   if (Array.isArray(expected)) {
     if (!Array.isArray(actual)) {
-      failures.push({ path, message: `配列を期待しましたが ${typeOf(actual)}（${show(actual)}）でした` });
+      failures.push({
+        path,
+        message: `expected an array, received ${typeOf(actual)} (${show(actual)})`,
+      });
       return;
     }
     if (expected.length !== actual.length) {
       failures.push({
         path,
-        message: `配列長 ${expected.length} を期待しましたが ${actual.length} でした`,
+        message: `expected array length ${expected.length}, received ${actual.length}`,
       });
       return;
     }
@@ -204,32 +231,38 @@ function evaluateNode(
 
   if (isPlainObject(expected)) {
     if (!isPlainObject(actual)) {
-      failures.push({ path, message: `オブジェクトを期待しましたが ${typeOf(actual)}（${show(actual)}）でした` });
+      failures.push({
+        path,
+        message: `expected an object, received ${typeOf(actual)} (${show(actual)})`,
+      });
       return;
     }
     for (const [key, expectedValue] of Object.entries(expected)) {
       const childPath = joinPath(path, key);
       const exists = key in actual && actual[key] !== undefined;
-      // キー存在系マッチャはキーの有無自体が検証対象なので、ここで先に処理する
+      // Key-presence matchers must be handled before recursing into values
       if (isMatcher(expectedValue)) {
         if (expectedValue["$absent"] === true) {
           if (exists) {
             failures.push({
               path: childPath,
-              message: `キーが存在しないことを期待しましたが、値 ${show(actual[key])} が存在します`,
+              message: `expected key to be absent, but found ${show(actual[key])}`,
             });
           }
           continue;
         }
         if (!exists) {
-          failures.push({ path: childPath, message: "キーが存在しません" });
+          failures.push({ path: childPath, message: "key is missing" });
           continue;
         }
         evaluateMatcher(expectedValue, actual[key], childPath, failures);
         continue;
       }
       if (!exists) {
-        failures.push({ path: childPath, message: `キーが存在しません（期待値: ${show(expectedValue)}）` });
+        failures.push({
+          path: childPath,
+          message: `key is missing (expected: ${show(expectedValue)})`,
+        });
         continue;
       }
       evaluateNode(expectedValue, actual[key], childPath, failures);
@@ -237,16 +270,16 @@ function evaluateNode(
     return;
   }
 
-  // プリミティブの深い等価
+  // Deep equality for primitives
   if (!Object.is(expected, actual)) {
     failures.push({
       path,
-      message: `${show(expected)} を期待しましたが ${show(actual)} でした`,
+      message: `expected ${show(expected)}, received ${show(actual)}`,
     });
   }
 }
 
-/** expect 木を実データに照合し、失敗を全件返す。空配列 = パス。 */
+/** Match an expect tree against actual data, returning every failure. Empty array = pass. */
 export function evaluate(expected: unknown, actual: unknown): MatchFailure[] {
   const failures: MatchFailure[] = [];
   evaluateNode(expected, actual, "", failures);

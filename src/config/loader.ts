@@ -1,7 +1,7 @@
 /**
- * mcp.json（MCP クライアント標準の mcpServers 形式）を読み、ServerConfig[] へ正規化する。
- * 既存の設定ファイルをそのまま流用できることが mcpest の DX の柱なので、
- * ここでは独自形式を導入しない。
+ * Reads mcp.json (the standard mcpServers format used by MCP clients) and
+ * normalizes it into ServerConfig[]. Reusing the file developers already have
+ * is a pillar of mcpest's DX, so no custom config format is introduced here.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -17,7 +17,7 @@ export class ConfigError extends Error {
 export interface LoadConfigOptions {
   cwd: string;
   configPath?: string;
-  /** ${VAR} 展開に使う環境変数。省略時は process.env */
+  /** Environment used for ${VAR} expansion. Defaults to process.env */
   env?: Record<string, string | undefined>;
 }
 
@@ -25,8 +25,10 @@ function expandVars(value: string, env: Record<string, string | undefined>, cont
   return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name: string) => {
     const resolved = env[name];
     if (resolved === undefined) {
+      // Failing loudly (rather than silently expanding to "") prevents invisible
+      // failures like connecting with an empty auth header
       throw new ConfigError(
-        `${context} が参照する環境変数 \${${name}} が定義されていません`,
+        `environment variable \${${name}} referenced by ${context} is not defined`,
       );
     }
     return resolved;
@@ -46,7 +48,7 @@ function expandRecord(
 function resolveConfigPath(cwd: string, configPath?: string): string {
   if (configPath) {
     if (!existsSync(configPath)) {
-      throw new ConfigError(`設定ファイルが見つかりません: ${configPath}`);
+      throw new ConfigError(`config file not found: ${configPath}`);
     }
     return configPath;
   }
@@ -54,7 +56,7 @@ function resolveConfigPath(cwd: string, configPath?: string): string {
     if (existsSync(candidate)) return candidate;
   }
   throw new ConfigError(
-    `設定ファイルが見つかりません。${cwd} に mcp.json / .mcp.json を置くか --config で指定してください`,
+    `no config file found: put mcp.json / .mcp.json in ${cwd} or pass --config`,
   );
 }
 
@@ -69,7 +71,7 @@ function normalizeServer(
 
   if (hasCommand && hasUrl) {
     throw new ConfigError(
-      `サーバー "${name}": command と url の両方が指定されています。stdio なら command、streamable-http なら url のどちらか一方にしてください`,
+      `server "${name}": both command and url are specified; use exactly one (command for stdio, url for streamable-http)`,
     );
   }
 
@@ -86,7 +88,7 @@ function normalizeServer(
 
   if (kind === "stdio") {
     if (!hasCommand) {
-      throw new ConfigError(`サーバー "${name}": stdio には command が必要です`);
+      throw new ConfigError(`server "${name}": stdio requires command`);
     }
     const args = Array.isArray(raw["args"]) ? raw["args"].map(String) : [];
     const rawEnv = (raw["env"] ?? {}) as Record<string, string>;
@@ -101,7 +103,7 @@ function normalizeServer(
 
   if (kind === "streamable-http") {
     if (!hasUrl) {
-      throw new ConfigError(`サーバー "${name}": streamable-http には url が必要です`);
+      throw new ConfigError(`server "${name}": streamable-http requires url`);
     }
     const rawHeaders = (raw["headers"] ?? {}) as Record<string, string>;
     return {
@@ -113,7 +115,7 @@ function normalizeServer(
   }
 
   throw new ConfigError(
-    `サーバー "${name}": command（stdio）か url（streamable-http）のどちらかが必要です`,
+    `server "${name}": either command (stdio) or url (streamable-http) is required`,
   );
 }
 
@@ -125,7 +127,7 @@ export function loadConfig(options: LoadConfigOptions): ServerConfig[] {
   try {
     parsed = JSON.parse(readFileSync(path, "utf8"));
   } catch (error) {
-    throw new ConfigError(`${path} の JSON パースに失敗しました: ${String(error)}`);
+    throw new ConfigError(`failed to parse JSON in ${path}: ${String(error)}`);
   }
 
   if (
@@ -134,7 +136,7 @@ export function loadConfig(options: LoadConfigOptions): ServerConfig[] {
     typeof (parsed as Record<string, unknown>)["mcpServers"] !== "object" ||
     (parsed as Record<string, unknown>)["mcpServers"] === null
   ) {
-    throw new ConfigError(`${path} に mcpServers オブジェクトがありません`);
+    throw new ConfigError(`${path} has no mcpServers object`);
   }
 
   const mcpServers = (parsed as { mcpServers: Record<string, Record<string, unknown>> })

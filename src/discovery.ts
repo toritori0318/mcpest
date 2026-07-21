@@ -1,7 +1,8 @@
 /**
- * *.mcpt.yaml の発見と TestCase[] への正規化。
- * バリデーション失敗はどのファイルの何が悪いかを一撃で伝える DiscoveryError にする
- * （テストランナーの入力エラーはユーザーが最初に踏む石なので、ここの音声品質が DX を決める）。
+ * Discovery of *.mcpt.yaml files and normalization into TestCase[].
+ * Validation failures become DiscoveryError messages that say exactly which
+ * file and what is wrong in one shot — input errors are the first stone users
+ * trip on, so the message quality here defines the DX.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -54,42 +55,42 @@ function normalizeTest(
   file: string,
   fileTimeoutMs: number,
 ): TestCase {
-  if (!isPlainObject(raw)) fail(file, `tests[${index}] はオブジェクトである必要があります`);
+  if (!isPlainObject(raw)) fail(file, `tests[${index}] must be an object`);
   const name = raw["name"];
   if (typeof name !== "string" || name === "") {
-    fail(file, `tests[${index}] に name がありません`);
+    fail(file, `tests[${index}] is missing name`);
   }
 
   const methodsPresent = METHODS.filter((m) => m in raw);
   if (methodsPresent.length === 0) {
-    fail(file, `テスト "${name}": メソッド（${METHODS.join(" / ")}）の指定がありません`);
+    fail(file, `test "${name}": no method specified (expected one of ${METHODS.join(" / ")})`);
   }
   if (methodsPresent.length > 1) {
-    fail(file, `テスト "${name}": メソッドは1つだけ指定してください（${methodsPresent.join(", ")}）`);
+    fail(file, `test "${name}": specify exactly one method (found ${methodsPresent.join(", ")})`);
   }
   const method = methodsPresent[0]!;
   const body = raw[method];
   if (body !== null && body !== undefined && !isPlainObject(body)) {
-    fail(file, `テスト "${name}": ${method} の値はオブジェクトである必要があります`);
+    fail(file, `test "${name}": the value of ${method} must be an object`);
   }
   const spec = (body ?? {}) as Record<string, unknown>;
 
   let tool: string | undefined;
   if (method === "tools/call") {
     if (typeof spec["tool"] !== "string" || spec["tool"] === "") {
-      fail(file, `テスト "${name}": tools/call には tool（ツール名）が必要です`);
+      fail(file, `test "${name}": tools/call requires tool (the tool name)`);
     }
     tool = spec["tool"];
   }
 
   const args = spec["args"] ?? {};
   if (!isPlainObject(args)) {
-    fail(file, `テスト "${name}": args はオブジェクトである必要があります`);
+    fail(file, `test "${name}": args must be an object`);
   }
 
   const timeoutRaw = raw["timeout"] ?? fileTimeoutMs;
   if (typeof timeoutRaw !== "number" || timeoutRaw <= 0) {
-    fail(file, `テスト "${name}": timeout は正の数値である必要があります`);
+    fail(file, `test "${name}": timeout must be a positive number`);
   }
 
   return {
@@ -111,29 +112,29 @@ function parseTestFile(path: string, knownServers: string[]): TestFile {
   try {
     doc = parseYaml(readFileSync(path, "utf8"));
   } catch (error) {
-    fail(path, `YAML のパースに失敗しました: ${String(error)}`);
+    fail(path, `YAML parse failed: ${String(error)}`);
   }
-  if (!isPlainObject(doc)) fail(path, "トップレベルはオブジェクトである必要があります");
+  if (!isPlainObject(doc)) fail(path, "the top level must be an object");
 
   const server = doc["server"];
   if (typeof server !== "string" || server === "") {
-    fail(path, "server（mcp.json の mcpServers キー名）が必要です");
+    fail(path, "server (a key in mcp.json's mcpServers) is required");
   }
   if (!knownServers.includes(server)) {
     fail(
       path,
-      `server "${server}" は設定に存在しません。利用可能: ${knownServers.join(", ") || "(なし)"}`,
+      `server "${server}" not found in config. Available: ${knownServers.join(", ") || "(none)"}`,
     );
   }
 
   const fileTimeout = doc["timeout"] ?? DEFAULT_TIMEOUT_MS;
   if (typeof fileTimeout !== "number" || fileTimeout <= 0) {
-    fail(path, "timeout は正の数値である必要があります");
+    fail(path, "timeout must be a positive number");
   }
 
   const testsRaw = doc["tests"];
   if (!Array.isArray(testsRaw) || testsRaw.length === 0) {
-    fail(path, "tests（1件以上の配列）が必要です");
+    fail(path, "tests (a non-empty array) is required");
   }
 
   const tests = testsRaw.map((t, i) => normalizeTest(t, i, path, fileTimeout));
@@ -141,7 +142,10 @@ function parseTestFile(path: string, knownServers: string[]): TestFile {
   const seen = new Set<string>();
   for (const t of tests) {
     if (seen.has(t.name)) {
-      fail(path, `テスト名 "${t.name}" が重複しています（スナップショットのキーになるため一意にしてください）`);
+      fail(
+        path,
+        `duplicate test name "${t.name}" (names are snapshot keys and must be unique)`,
+      );
     }
     seen.add(t.name);
   }

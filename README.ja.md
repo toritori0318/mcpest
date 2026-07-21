@@ -47,7 +47,7 @@ tests:
   - name: 未知のロケーションはツールエラー
     tools/call:
       tool: get_weather
-      args: { location: "存在しない場所XYZ" }
+      args: { location: "nowhere-xyz" }
       expect:
         isError: true
         content: { $contains: "not found" }

@@ -1,7 +1,7 @@
 /**
- * ServerConfig から SDK Client への接続を確立する。
- * initialize/initialized ハンドシェイクは SDK に委譲し、mcpest は
- * トランスポート層に割り込んで全 JSON-RPC メッセージをトレースに記録する。
+ * Establishes an SDK Client connection from a ServerConfig.
+ * The initialize/initialized handshake is delegated to the SDK; mcpest hooks
+ * into the transport layer to record every JSON-RPC message for tracing.
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -26,7 +26,7 @@ export interface Connection {
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 
-/** transport の send / onmessage に割り込んで全メッセージを記録する */
+/** Intercept the transport's send / onmessage to record every message */
 function instrument(transport: Transport, trace: TraceRecorder): void {
   const originalSend = transport.send.bind(transport);
   transport.send = (message, options) => {
@@ -34,8 +34,8 @@ function instrument(transport: Transport, trace: TraceRecorder): void {
     return originalSend(message, options);
   };
 
-  // onmessage は SDK の Protocol 層が connect 時に代入するため、
-  // setter を横取りしてラップ済みハンドラを差し込む
+  // The SDK's Protocol layer assigns onmessage during connect, so hijack the
+  // setter to slip in a wrapped handler
   let handler: ((message: unknown, extra?: unknown) => void) | undefined;
   Object.defineProperty(transport, "onmessage", {
     configurable: true,
@@ -81,7 +81,7 @@ export async function connect(
     });
     transport = stdioTransport;
   } else {
-    // exactOptionalPropertyTypes と SDK 型定義の相性問題のためキャストする
+    // Cast needed due to exactOptionalPropertyTypes friction with SDK typings
     transport = new StreamableHTTPClientTransport(new URL(config.url), {
       requestInit: { headers: config.headers },
     }) as unknown as Transport;
@@ -89,7 +89,7 @@ export async function connect(
 
   instrument(transport, trace);
 
-  const client = new Client({ name: "mcpest", version: "0.0.1" });
+  const client = new Client({ name: "mcpest", version: "0.1.0" });
   const timeoutMs = options?.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
 
   try {
@@ -97,7 +97,7 @@ export async function connect(
       client.connect(transport),
       new Promise((_, reject) =>
         setTimeout(
-          () => reject(new Error(`接続が ${timeoutMs}ms 以内に確立しませんでした`)),
+          () => reject(new Error(`connection was not established within ${timeoutMs}ms`)),
           timeoutMs,
         ).unref(),
       ),
@@ -105,7 +105,7 @@ export async function connect(
   } catch (error) {
     await transport.close().catch(() => {});
     const connError = new ConnectionError(
-      `サーバー "${config.name}" への接続に失敗しました: ${error instanceof Error ? error.message : String(error)}`,
+      `failed to connect to server "${config.name}": ${error instanceof Error ? error.message : String(error)}`,
     );
     const tail = stderrChunks.join("").trim().split("\n").slice(-20).join("\n");
     if (tail) connError.stderrTail = tail;
@@ -124,8 +124,8 @@ export async function connect(
       ? { serverVersion: String(serverVersion.version) }
       : {}),
     close: async () => {
-      // MCP 仕様の shutdown: stdio はトランスポート close（stdin クローズ→SIGTERM→SIGKILL は
-      // SDK の StdioClientTransport.close が担う）。HTTP は接続クローズのみ。
+      // MCP-spec shutdown: for stdio the SDK's StdioClientTransport.close handles
+      // stdin close → SIGTERM → SIGKILL; for HTTP it just closes the connection.
       await client.close().catch(() => {});
     },
   };

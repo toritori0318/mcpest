@@ -1,92 +1,95 @@
-# mcpest テストリスト
+# mcpest test list
 
-t_wada 流 TDD の作業台。ここから1つ選んでテストに翻訳 → Red → Green → Refactor。
-気づいたシナリオは随時追記する。`[x]` = テスト化して Green 済み。
+The working bench for t_wada-style TDD: pick one scenario, translate it into a
+failing test, make it pass (Red → Green → Refactor). Add newly discovered
+scenarios as you go. `[x]` = turned into a test and green.
 
-## T6: assert/matchers（マッチャ DSL 評価器）
+## T6: assert/matchers (matcher DSL evaluator)
 
-- [x] プレーン値の深い等価（一致 / 不一致）
-- [x] オブジェクトは部分一致（expect に無い実キーは無視）
-- [x] ネストしたオブジェクトの失敗パスが `a.b.c` 形式で返る
-- [x] 配列は位置対応で厳密比較（長さ不一致は失敗）
-- [x] `$type`: number/string/boolean/object/array/null の判定
-- [x] `$regex`: 部分一致・非文字列に適用したら失敗
-- [x] `$contains`: 文字列部分一致 / 配列要素包含
-- [x] `$contains`: content 配列特例（いずれかの item.text に部分一致）
-- [x] `$length`: 数値指定 / `{$gte,$lte,$eq}` 指定
-- [x] `$gte/$lte/$gt/$lt`: 数値比較・非数値は失敗
-- [x] `$any`: 存在すれば型を問わずパス、キー欠落は失敗
-- [x] `$absent`: キーが無ければパス、あれば失敗
-- [x] 複数の失敗を全件収集する（最初で止めない）
+- [x] deep equality for plain values (match / mismatch)
+- [x] objects match partially (extra actual keys are ignored)
+- [x] nested failures report `a.b.c`-style paths
+- [x] arrays compare positionally (length mismatch fails)
+- [x] `$type`: number/string/boolean/object/array/null
+- [x] `$regex`: partial match; fails on non-strings
+- [x] `$contains`: substring on strings / element inclusion on arrays
+- [x] `$contains`: content-array special case (substring on any item.text)
+- [x] `$length`: numeric form / `{$gte,$lte,$eq}` form
+- [x] `$gte/$lte/$gt/$lt`: numeric comparison; fails on non-numbers
+- [x] `$any`: passes on any value if the key exists; missing key fails
+- [x] `$absent`: passes when the key is missing, fails when present
+- [x] collects every failure (never stops at the first)
 
-## T7: assert/schema-check（ajv 検証）
+## T7: assert/schema-check (ajv validation)
 
-- [x] inputSchema 適合の args はパス
-- [x] inputSchema 不適合（型違い・required 欠落）はエラーメッセージつきで失敗
-- [x] outputSchema 適合の structuredContent はパス
-- [x] outputSchema 不適合は失敗
-- [x] draft 2020-12 のスキーマを受理する
+- [x] conforming args pass against inputSchema
+- [x] non-conforming args (type mismatch / missing required) fail with messages
+- [x] conforming structuredContent passes against outputSchema
+- [x] non-conforming structuredContent fails
+- [x] accepts draft 2020-12 schemas
+- [x] accepts draft-07 schemas (what the TypeScript SDK emits)
 
-## T3: config/loader（mcp.json）
+## T3: config/loader (mcp.json)
 
-- [x] mcpServers 形式をパースし stdio 設定を得る
-- [x] `type` 省略時: command → stdio / url → streamable-http と推論
-- [x] command と url 両方あればエラー（両キー名を含むメッセージ）
-- [x] `${VAR}` 環境変数展開（env・headers・url 内）
-- [x] 探索順: --config 指定 → mcp.json → .mcp.json
-- [x] 見つからない場合は明確なエラー
-- [x] "http" を "streamable-http" の同義として受理
+- [x] parses the mcpServers format into stdio configs
+- [x] infers type when omitted: command → stdio / url → streamable-http
+- [x] both command and url is an error naming both keys
+- [x] `${VAR}` expansion (in env, headers, and url)
+- [x] lookup order: --config → mcp.json → .mcp.json
+- [x] clear error when no config is found
+- [x] accepts "http" as an alias of "streamable-http"
 
-## T4: discovery（テストファイル発見と正規化）
+## T4: discovery (finding and normalizing test files)
 
-- [x] `**/*.mcpt.yaml` を発見（node_modules 除外）
-- [x] YAML → TestCase[] 正規化（既定値: timeout 30000, validateInput/Output true, snapshot false）
-- [x] tools/call で tool 欠落はスキーマエラー（ファイル名つき）
-- [x] 同一ファイル内の name 重複はエラー
-- [x] server キー未知（mcp.json に無い）はエラーで候補一覧を出す
+- [x] finds `**/*.mcpt.yaml` (excluding node_modules)
+- [x] normalizes YAML → TestCase[] (defaults: timeout 30000, validateInput/Output true, snapshot false)
+- [x] tools/call without tool is a schema error naming the file
+- [x] duplicate test names within a file are an error
+- [x] unknown server key is an error listing candidates
 
 ## T8: assert/snapshot
 
-- [x] 初回実行でスナップショットファイル生成 & パス
-- [x] 同一結果で再実行 → パス
-- [x] 結果変化 → 失敗＋diff
-- [x] `-u` で上書き更新
-- [x] CI モード（未存在 = 失敗）
-- [x] 正規化: キーソート・nextCursor 除外
+- [x] first run creates the snapshot file and passes
+- [x] re-run with identical data passes
+- [x] changed data fails with a diff
+- [x] `-u` overwrites
+- [x] CI mode (missing = failure)
+- [x] normalization: sorted keys, nextCursor excluded
 
-## T5/T9: connector + runner（fixtures サーバー統合）
+## T5/T9: connector + runner (integration against fixture servers)
 
-- [x] stdio fixtures に接続し tools/list が 4 ツールを返す
-- [x] tools/call echo が期待どおり
-- [x] get_weather の structuredContent が outputSchema 自動検証をパス
-- [x] bad fixtures（outputSchema 不適合）は expect なしでも失敗（受け入れ 4）
-- [x] inputSchema 不適合 args は呼び出し前に失敗、トレースに tools/call が無い（受け入れ 5）
-- [x] slow_tool + timeout 1000 → 失敗(timeout)、後続テスト継続（受け入れ 6）
-- [x] streamable-http fixtures で同様に動作、headers が付与される（受け入れ 7）
-- [x] 接続失敗（コマンド不存在）→ error 分類 + stderr 表示（受け入れ 10）
-- [x] tools/list ページング追跡（複数ページ fixtures）
-- [x] 失敗時トレース JSONL に initialize〜tools/call が方向つきで記録（受け入れ 9）
-- [ ] shutdown: 終了後に子プロセスが残らない（未テスト化: ポータブルなプロセス残留検証の方法を要検討）
+- [x] connects to the stdio fixture; tools/list returns 4 tools
+- [x] tools/call echo behaves as expected
+- [x] get_weather structuredContent passes outputSchema auto-validation
+- [x] bad fixture (outputSchema violation) fails even without expect (acceptance 4)
+- [x] args violating inputSchema fail before the call; no tools/call in the trace (acceptance 5)
+- [x] slow_tool + timeout 1000 → fails as timeout; later tests continue (acceptance 6)
+- [x] works over streamable-http; headers are attached (acceptance 7)
+- [x] connection failure (missing command) → error classification + stderr shown (acceptance 10)
+- [x] tools/list pagination followed across pages
+- [x] failure trace JSONL records initialize through tools/call with directions (acceptance 9)
+- [ ] shutdown: no child process left behind (not yet tested: needs a portable process-liveness check)
 
 ## T10: report
 
-- [x] pretty: パス/失敗数・失敗パス・diff を含む（非 TTY で色なし）
-- [x] junit: testsuite の tests/failures が結果と一致（受け入れ 8）
-- [x] json: RunResult がそのままシリアライズされる
+- [x] pretty: pass/fail counts, failure paths, diffs (no color when not a TTY)
+- [x] junit: testsuite tests/failures match the results (acceptance 8)
+- [x] json: RunResult serialized as-is
 
-## T11/T12: commands（CLI E2E）
+## T11/T12: commands (CLI end-to-end)
 
-- [x] `mcpest test` 正常系 exit 0（受け入れ 1）
-- [x] expect 不一致 exit 1 + 失敗パス表示（受け入れ 2）
-- [x] スナップショットの生成→変更検知→ `-u` 更新（受け入れ 3）
-- [x] `mcpest call` 結果 JSON / isError でも exit 0 / プロトコルエラー exit 1（受け入れ 11）
-- [x] `mcpest list` 表形式 + exit 0 / 接続失敗 exit 2（受け入れ 13）
-- [x] `mcpest init` 非対話でデフォルト生成（受け入れ 12）
-- [x] 不正 YAML / 未知 server キー → exit 2（受け入れ 10）
-- [x] `--grep` のフィルタ動作
-- [ ] `--server` / `--bail` のフィルタ動作（未テスト化）
+- [x] `mcpest test` happy path exits 0 (acceptance 1)
+- [x] expect mismatch exits 1 and prints the failure path (acceptance 2)
+- [x] snapshots: create → detect change → `-u` update (acceptance 3)
+- [x] `mcpest call`: result JSON / exit 0 even on isError / exit 1 on protocol errors (acceptance 11)
+- [x] `mcpest list`: table output + exit 0 / exit 2 on connection failure (acceptance 13)
+- [x] `mcpest init`: non-interactive generation with defaults (acceptance 12)
+- [x] invalid YAML / unknown server key → exit 2 (acceptance 10)
+- [x] `--reporter junit --output` writes JUnit XML with matching counts (acceptance 8)
+- [x] `--grep` filtering
+- [ ] `--server` / `--bail` filtering (not yet tested)
 
-## 非機能
+## Non-functional
 
-- [ ] fixtures 10 テストスイートが 10 秒以内（自動計測は未テスト化。現状の統合スイート16件は実測 ~7 秒で通過）
-- [x] env 値がレポート・トレースで `***` にマスクされる
+- [ ] a 10-test fixture suite finishes within 10 seconds (no automated measurement yet; the current 16-test integration suite completes in ~7s)
+- [x] env values are masked as `***` in reports and traces

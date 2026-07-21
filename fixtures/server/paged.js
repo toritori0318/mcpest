@@ -1,6 +1,6 @@
-// tools/list のページングを再現する fixtures サーバー（3 ページ × 2 ツール）。
-// 高レベル McpServer はページングを露出しないため低レベル Server で実装する。
-// 使い方: node fixtures/server/paged.js（stdio）
+// A fixture server that reproduces tools/list pagination (3 pages x 2 tools).
+// The high-level McpServer does not expose pagination, so the low-level Server
+// is used. Usage: node fixtures/server/paged.js (stdio)
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {

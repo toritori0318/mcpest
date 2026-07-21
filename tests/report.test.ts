@@ -18,7 +18,7 @@ const sampleResult: RunResult = {
       results: [
         {
           test: {
-            name: "一覧が壊れていない",
+            name: "list has not drifted",
             method: "tools/list",
             args: {},
             validateInput: true,
@@ -34,7 +34,7 @@ const sampleResult: RunResult = {
         },
         {
           test: {
-            name: "天気の呼び出し",
+            name: "weather call",
             method: "tools/call",
             tool: "get_weather",
             args: { location: "Tokyo" },
@@ -49,7 +49,7 @@ const sampleResult: RunResult = {
           failures: [
             {
               path: "structuredContent.temperature",
-              message: '型 number を期待しましたが string（"very hot"）でした',
+              message: 'expected type number, received string ("very hot")',
             },
           ],
           schemaChecks: [{ kind: "output", ok: false, errors: ["type mismatch"] }],
@@ -63,31 +63,31 @@ const sampleResult: RunResult = {
   durationMs: 562,
 };
 
-describe("pretty レポータ", () => {
-  it("結果サマリ・失敗パス・トレースパスを含む", () => {
+describe("pretty reporter", () => {
+  it("includes the summary, failure paths, and trace paths", () => {
     const out = renderPretty(sampleResult, { color: false });
-    expect(out).toContain("一覧が壊れていない");
-    expect(out).toContain("天気の呼び出し");
+    expect(out).toContain("list has not drifted");
+    expect(out).toContain("weather call");
     expect(out).toContain("structuredContent.temperature");
     expect(out).toContain("weather-1.jsonl");
     expect(out).toContain("1 passed");
     expect(out).toContain("1 failed");
   });
 
-  it("color: false では ANSI エスケープを含まない", () => {
+  it("emits no ANSI escapes with color: false", () => {
     const out = renderPretty(sampleResult, { color: false });
     // eslint-disable-next-line no-control-regex
     expect(out).not.toMatch(/\[/);
   });
 
-  it("接続情報（プロトコルバージョン）を表示する", () => {
+  it("shows connection info (protocol version)", () => {
     const out = renderPretty(sampleResult, { color: false });
     expect(out).toContain("2025-06-18");
   });
 });
 
-describe("junit レポータ", () => {
-  it("testsuite の tests/failures 数が結果と一致する（受け入れ8）", () => {
+describe("junit reporter", () => {
+  it("testsuite tests/failures counts match the results (acceptance 8)", () => {
     const xml = renderJunit(sampleResult);
     expect(xml).toContain('tests="2"');
     expect(xml).toContain('failures="1"');
@@ -95,7 +95,7 @@ describe("junit レポータ", () => {
     expect(xml).toContain('<testsuite name="weather"');
   });
 
-  it("失敗メッセージの XML 特殊文字がエスケープされる", () => {
+  it("escapes XML special characters in failure messages", () => {
     const result = structuredClone(sampleResult);
     result.servers[0]!.results[1]!.failures[0]!.message = 'a < b & "quote"';
     const xml = renderJunit(result);
@@ -104,8 +104,8 @@ describe("junit レポータ", () => {
   });
 });
 
-describe("json レポータ", () => {
-  it("RunResult がそのままラウンドトリップできる", () => {
+describe("json reporter", () => {
+  it("round-trips the RunResult", () => {
     const parsed = JSON.parse(renderJson(sampleResult));
     expect(parsed.counts).toEqual(sampleResult.counts);
     expect(parsed.servers[0].results[1].failures[0].path).toBe(

@@ -1,5 +1,6 @@
 /**
- * `mcpest test` の本体。exit code 規約: 0=全パス / 1=テスト失敗あり / 2=設定・接続エラー（テスト未実行）。
+ * The `mcpest test` command. Exit code contract:
+ * 0 = all passed / 1 = test failures / 2 = config or connection errors (nothing ran).
  */
 import { writeFileSync } from "node:fs";
 import { ConfigError } from "../config/loader.js";
@@ -46,7 +47,8 @@ export async function testCommand(options: TestCommandOptions): Promise<number> 
   }
 
   if (result.ok) return 0;
-  // 何も実行できていない（全サーバー接続失敗）なら設定・接続エラー扱い
+  // If nothing could run at all (every server failed to connect), treat it as
+  // a config/connection error rather than a test failure
   const nothingRan = result.servers.length > 0 && result.servers.every((s) => !s.connection.ok);
   return nothingRan ? 2 : 1;
 }

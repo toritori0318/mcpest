@@ -1,7 +1,7 @@
-// outputSchema に不適合な structuredContent を返す「行儀の悪い」fixtures サーバー。
-// 高レベル McpServer はサーバー側で出力を検証して例外にしてしまうため、
-// 仕様違反サーバーを再現する目的で低レベル Server を直接使う。
-// 使い方: node fixtures/server/bad.js（stdio）
+// A misbehaving fixture server that returns structuredContent violating its
+// outputSchema. The high-level McpServer validates output server-side and throws,
+// so the low-level Server is used directly to reproduce a spec-violating server.
+// Usage: node fixtures/server/bad.js (stdio)
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -49,7 +49,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === "bad_weather") {
-    // temperature を文字列で返す = outputSchema 違反
+    // Returning temperature as a string violates the outputSchema
     const structuredContent = { temperature: "very hot", conditions: "Sunny" };
     return {
       content: [{ type: "text", text: JSON.stringify(structuredContent) }],

@@ -9,7 +9,7 @@ import { runSuite } from "../src/runner/runner.js";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const fixture = (name: string) => join(repoRoot, "fixtures", "server", name);
 
-/** 一時ディレクトリに mcp.json とテスト YAML を配置して runSuite を回すヘルパ */
+/** Helper: place mcp.json and test YAML in a temp dir and run runSuite there */
 function setup(files: Record<string, string>, mcpServers: Record<string, unknown>): string {
   const dir = mkdtempSync(join(tmpdir(), "mcpest-run-"));
   writeFileSync(join(dir, "mcp.json"), JSON.stringify({ mcpServers }));
@@ -21,14 +21,14 @@ function setup(files: Record<string, string>, mcpServers: Record<string, unknown
 
 const stdioServer = { command: "node", args: [fixture("stdio.js")] };
 
-describe("stdio: 正常系", () => {
-  it("tools/list が 4 ツールを返し、スナップショットが生成される", async () => {
+describe("stdio: happy path", () => {
+  it("tools/list returns 4 tools and a snapshot is created", async () => {
     const dir = setup(
       {
         "basic.mcpt.yaml": `
 server: fx
 tests:
-  - name: 一覧
+  - name: list
     tools/list:
       snapshot: true
       expect:
@@ -43,7 +43,7 @@ tests:
     expect(existsSync(join(dir, "__mcpest_snapshots__", "basic.mcpt.yaml.snap.json"))).toBe(true);
   });
 
-  it("echo / get_weather の expect 照合と outputSchema 自動検証がパスする", async () => {
+  it("echo / get_weather pass expect matching and outputSchema auto-validation", async () => {
     const dir = setup(
       {
         "call.mcpt.yaml": `
@@ -76,16 +76,16 @@ tests:
     expect(weather.schemaChecks.some((c) => c.kind === "output" && c.ok)).toBe(true);
   });
 
-  it("isError:true のツール実行エラーは expect で照合できる（失敗にしない）", async () => {
+  it("an isError:true tool result can be matched with expect (not an automatic failure)", async () => {
     const dir = setup(
       {
         "err.mcpt.yaml": `
 server: fx
 tests:
-  - name: ツールエラー
+  - name: tool error
     tools/call:
       tool: get_weather
-      args: { location: "存在しない場所XYZ" }
+      args: { location: "nowhere-xyz" }
       expect:
         isError: true
         content: { $contains: "not found" }
@@ -98,14 +98,14 @@ tests:
   });
 });
 
-describe("失敗の検出", () => {
-  it("expect 省略時でも isError:true のツールは failed（既定検証）", async () => {
+describe("failure detection", () => {
+  it("an isError:true tool fails even without expect (default check)", async () => {
     const dir = setup(
       {
         "default.mcpt.yaml": `
 server: fx
 tests:
-  - name: expect なしでエラーツール
+  - name: error tool without expect
     tools/call:
       tool: failing_tool
 `,
@@ -118,13 +118,13 @@ tests:
     expect(r.failures[0]!.message).toContain("isError");
   });
 
-  it("expect 不一致は failed になり、失敗パスが返る", async () => {
+  it("an expect mismatch fails with a failure path", async () => {
     const dir = setup(
       {
         "fail.mcpt.yaml": `
 server: fx
 tests:
-  - name: わざと不一致
+  - name: deliberate mismatch
     tools/call:
       tool: echo
       args: { text: "actual" }
@@ -143,17 +143,17 @@ tests:
     expect(r.failures.some((f) => f.path.includes("content"))).toBe(true);
   });
 
-  it("outputSchema 不適合サーバーは expect なしでも failed（受け入れ4）", async () => {
+  it("a server violating its outputSchema fails even without expect (acceptance 4)", async () => {
     const dir = setup(
       {
         "bad.mcpt.yaml": `
 server: bad
 tests:
-  - name: 型違いの structuredContent
+  - name: wrongly typed structuredContent
     tools/call:
       tool: bad_weather
       args: { location: "x" }
-  - name: structuredContent の欠落
+  - name: missing structuredContent
     tools/call:
       tool: missing_structured
 `,
@@ -168,13 +168,13 @@ tests:
     expect(missing!.status).toBe("failed");
   });
 
-  it("inputSchema 不適合の args は呼び出し前に failed、トレースに tools/call が無い（受け入れ5）", async () => {
+  it("args violating inputSchema fail before the call; the trace has no tools/call (acceptance 5)", async () => {
     const dir = setup(
       {
         "badargs.mcpt.yaml": `
 server: fx
 tests:
-  - name: 引数の型違い
+  - name: wrongly typed argument
     tools/call:
       tool: get_weather
       args: { location: 12345 }
@@ -191,17 +191,17 @@ tests:
     expect(trace).not.toContain('"tools/call"');
   });
 
-  it("timeout は failed(timeout) になり後続テストは継続する（受け入れ6）", async () => {
+  it("a timeout fails as timeout and later tests still run (acceptance 6)", async () => {
     const dir = setup(
       {
         "slow.mcpt.yaml": `
 server: fx
 tests:
-  - name: 遅いツール
+  - name: slow tool
     timeout: 1000
     tools/call:
       tool: slow_tool
-  - name: 後続は動く
+  - name: still runs afterwards
     tools/call:
       tool: echo
       args: { text: "still alive" }
@@ -212,17 +212,17 @@ tests:
     const result = await runSuite({ cwd: dir });
     const [slow, after] = result.servers[0]!.results;
     expect(slow!.status).toBe("failed");
-    expect(slow!.failures.some((f) => /timeout|タイムアウト/i.test(f.message))).toBe(true);
+    expect(slow!.failures.some((f) => /timeout/i.test(f.message))).toBe(true);
     expect(after!.status).toBe("passed");
   }, 30_000);
 
-  it("存在しないツール名は failed で、実在ツール一覧を含む", async () => {
+  it("an unknown tool name fails and lists the available tools", async () => {
     const dir = setup(
       {
         "unknown.mcpt.yaml": `
 server: fx
 tests:
-  - name: 未知ツール
+  - name: unknown tool
     tools/call:
       tool: no_such_tool
 `,
@@ -236,14 +236,14 @@ tests:
   });
 });
 
-describe("接続とプロトコル", () => {
-  it("接続失敗（存在しないスクリプト）は全テスト error + stderr 診断（受け入れ10）", async () => {
+describe("connection and protocol", () => {
+  it("a connection failure (missing script) errors every test with stderr diagnostics (acceptance 10)", async () => {
     const dir = setup(
       {
         "conn.mcpt.yaml": `
 server: broken
 tests:
-  - name: 実行されない
+  - name: never runs
     tools/list: {}
 `,
       },
@@ -256,13 +256,13 @@ tests:
     expect(result.ok).toBe(false);
   }, 20_000);
 
-  it("tools/list のページングを全ページ追跡する", async () => {
+  it("tools/list follows pagination across all pages", async () => {
     const dir = setup(
       {
         "paged.mcpt.yaml": `
 server: paged
 tests:
-  - name: 全ページ
+  - name: all pages
     tools/list:
       expect:
         tools: { $length: 6 }
@@ -274,13 +274,13 @@ tests:
     expect(result.ok).toBe(true);
   });
 
-  it("失敗時トレース JSONL に initialize〜tools/call が方向つきで記録される（受け入れ9）", async () => {
+  it("the failure trace JSONL records initialize through tools/call with directions (acceptance 9)", async () => {
     const dir = setup(
       {
         "trace.mcpt.yaml": `
 server: fx
 tests:
-  - name: 失敗してトレースが残る
+  - name: fails and leaves a trace
     tools/call:
       tool: echo
       args: { text: "x" }
@@ -298,13 +298,13 @@ tests:
     expect(lines.some((l) => l.dir === "recv" && l.message.result)).toBe(true);
   });
 
-  it("パスしたテストのトレースは既定（retain-on-failure）では残らない", async () => {
+  it("passing tests keep no trace under the default retain-on-failure mode", async () => {
     const dir = setup(
       {
         "pass.mcpt.yaml": `
 server: fx
 tests:
-  - name: パスする
+  - name: passes
     tools/call:
       tool: echo
       args: { text: "y" }
@@ -316,13 +316,13 @@ tests:
     expect(result.servers[0]!.results[0]!.tracePath).toBeUndefined();
   });
 
-  it("env の値はトレース内で *** にマスクされる（非機能）", async () => {
+  it("env values are masked as *** in traces (non-functional)", async () => {
     const dir = setup(
       {
         "mask.mcpt.yaml": `
 server: fx
 tests:
-  - name: 秘密値をエコーして失敗させる
+  - name: echo the secret and fail on purpose
     tools/call:
       tool: echo
       args: { text: "topsecret123" }
@@ -346,7 +346,7 @@ describe("streamable-http", () => {
     proc?.kill();
   });
 
-  it("HTTP サーバーに headers つきで接続してテストが通る（受け入れ7）", async () => {
+  it("connects to the HTTP server with headers and tests pass (acceptance 7)", async () => {
     proc = spawn("node", [fixture("http.js")], {
       env: { ...process.env, PORT: String(port), MCPEST_FIXTURE_REQUIRE_AUTH: "1" },
       stdio: ["ignore", "pipe", "ignore"],
@@ -385,13 +385,13 @@ tests:
     const result = await runSuite({ cwd: dir });
     expect(result.ok).toBe(true);
 
-    // headers が無ければ 401 で接続に失敗することも確認（ヘッダが実際に効いている証明）
+    // Without headers the connection must fail with 401 — proof the headers matter
     const dirNoAuth = setup(
       {
         "http.mcpt.yaml": `
 server: remote
 tests:
-  - name: 認証なし
+  - name: no auth
     tools/list: {}
 `,
       },

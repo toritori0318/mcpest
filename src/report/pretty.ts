@@ -1,6 +1,6 @@
 /**
- * TTY 向けレポータ。「失敗したとき、次に何をすべきかが読んで分かる」ことを最優先に、
- * 失敗パス・メッセージ・diff・トレースパスをまとめて出す。
+ * TTY reporter. Optimized so that "what to do next" is readable at a glance
+ * when a test fails: failure path, message, diff, and trace path together.
  */
 import pc from "picocolors";
 import type { RunResult } from "./types.js";
@@ -27,11 +27,10 @@ export function renderPretty(result: RunResult, options: PrettyOptions): string 
       const proto = server.connection.protocolVersion ?? "?";
       const ms = server.connection.connectMs ?? 0;
       lines.push(
-        c.bold(`  ${server.server}`) +
-          c.dim(`  connected in ${ms}ms (protocol ${proto})`),
+        c.bold(`  ${server.server}`) + c.dim(`  connected in ${ms}ms (protocol ${proto})`),
       );
     } else {
-      lines.push(c.bold(`  ${server.server}`) + c.red("  接続失敗"));
+      lines.push(c.bold(`  ${server.server}`) + c.red("  connection failed"));
       if (server.connection.error) lines.push(c.red(`    ${server.connection.error}`));
       if (server.connection.stderrTail) {
         lines.push(c.dim("    --- server stderr ---"));

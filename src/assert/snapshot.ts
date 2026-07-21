@@ -1,9 +1,9 @@
 /**
- * スナップショットの保存・比較・更新。
- * 保存先はテストファイルと同階層の __mcpest_snapshots__/<basename>.snap.json、
- * キーはテスト name（discovery が一意性を保証済み）。
- * nextCursor を除外するのはページングカーソルが実行ごとに変わり得る運搬用データで、
- * サーバーの「見た目の契約」ではないため。
+ * Snapshot storage, comparison, and updating.
+ * Snapshots live next to the test file in __mcpest_snapshots__/<basename>.snap.json,
+ * keyed by test name (discovery guarantees uniqueness).
+ * nextCursor is excluded because pagination cursors are transport plumbing that
+ * can change between runs — they are not part of the server's visible contract.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -22,7 +22,7 @@ interface SnapshotOptions {
 
 const EXCLUDED_KEYS = new Set(["nextCursor"]);
 
-/** キーをソートし、除外キーを落とした正規形にする */
+/** Canonical form: sorted keys, excluded keys dropped */
 function normalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalize);
   if (typeof value === "object" && value !== null) {
@@ -76,9 +76,9 @@ export class SnapshotStore {
       snapshotPath: this.path,
       diff:
         jestDiff(stored, normalized, {
-          aAnnotation: "スナップショット",
-          bAnnotation: "実行結果",
-        }) ?? "(diff 生成不可)",
+          aAnnotation: "Snapshot",
+          bAnnotation: "Received",
+        }) ?? "(diff unavailable)",
     };
   }
 

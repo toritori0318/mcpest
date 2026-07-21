@@ -14,10 +14,10 @@ function makeDir(): string {
 const VALID_YAML = `
 server: weather
 tests:
-  - name: 一覧スナップショット
+  - name: list snapshot
     tools/list:
       snapshot: true
-  - name: 天気の呼び出し
+  - name: call the weather tool
     tools/call:
       tool: get_weather
       args: { location: "Tokyo" }
@@ -25,8 +25,8 @@ tests:
         isError: false
 `;
 
-describe("ファイル発見", () => {
-  it("**/*.mcpt.yaml を再帰的に発見する", () => {
+describe("file discovery", () => {
+  it("finds **/*.mcpt.yaml recursively", () => {
     const dir = makeDir();
     mkdirSync(join(dir, "sub"), { recursive: true });
     writeFileSync(join(dir, "a.mcpt.yaml"), VALID_YAML);
@@ -39,7 +39,7 @@ describe("ファイル発見", () => {
     ]);
   });
 
-  it("node_modules 配下は除外する", () => {
+  it("excludes node_modules", () => {
     const dir = makeDir();
     mkdirSync(join(dir, "node_modules", "pkg"), { recursive: true });
     writeFileSync(join(dir, "node_modules", "pkg", "x.mcpt.yaml"), VALID_YAML);
@@ -48,7 +48,7 @@ describe("ファイル発見", () => {
     expect(files).toHaveLength(1);
   });
 
-  it("glob 指定があればそれを優先する", () => {
+  it("explicit globs take precedence", () => {
     const dir = makeDir();
     writeFileSync(join(dir, "a.mcpt.yaml"), VALID_YAML);
     writeFileSync(join(dir, "b.mcpt.yaml"), VALID_YAML);
@@ -57,14 +57,14 @@ describe("ファイル発見", () => {
   });
 });
 
-describe("TestCase への正規化", () => {
-  it("既定値: timeout 30000 / validateInput・validateOutput true / snapshot false", () => {
+describe("normalization into TestCase", () => {
+  it("defaults: timeout 30000 / validateInput+validateOutput true / snapshot false", () => {
     const dir = makeDir();
     writeFileSync(join(dir, "a.mcpt.yaml"), VALID_YAML);
     const [file] = discoverTests({ cwd: dir, knownServers: ["weather"] });
     const call = file!.tests[1]!;
     expect(call).toMatchObject({
-      name: "天気の呼び出し",
+      name: "call the weather tool",
       method: "tools/call",
       tool: "get_weather",
       args: { location: "Tokyo" },
@@ -77,7 +77,7 @@ describe("TestCase への正規化", () => {
     expect(list).toMatchObject({ method: "tools/list", snapshot: true });
   });
 
-  it("ファイルレベル timeout がテストに継承され、テスト側で上書きできる", () => {
+  it("a file-level timeout is inherited and can be overridden per test", () => {
     const dir = makeDir();
     writeFileSync(
       join(dir, "a.mcpt.yaml"),
@@ -85,9 +85,9 @@ describe("TestCase への正規化", () => {
 server: weather
 timeout: 5000
 tests:
-  - name: 継承
+  - name: inherited
     tools/list: {}
-  - name: 上書き
+  - name: overridden
     timeout: 1000
     tools/call:
       tool: echo
@@ -100,15 +100,15 @@ tests:
   });
 });
 
-describe("バリデーションエラー", () => {
-  it("tools/call で tool 欠落はファイル名を含むエラー", () => {
+describe("validation errors", () => {
+  it("a tools/call without tool is an error naming the file", () => {
     const dir = makeDir();
     writeFileSync(
       join(dir, "broken.mcpt.yaml"),
       `
 server: weather
 tests:
-  - name: tool が無い
+  - name: missing tool
     tools/call:
       args: { x: 1 }
 `,
@@ -123,25 +123,25 @@ tests:
     }
   });
 
-  it("同一ファイル内の name 重複はエラー（スナップショットキー衝突防止）", () => {
+  it("duplicate test names within a file are an error (snapshot key collision)", () => {
     const dir = makeDir();
     writeFileSync(
       join(dir, "dup.mcpt.yaml"),
       `
 server: weather
 tests:
-  - name: 同じ名前
+  - name: same name
     tools/list: {}
-  - name: 同じ名前
+  - name: same name
     tools/list: {}
 `,
     );
     expect(() => discoverTests({ cwd: dir, knownServers: ["weather"] })).toThrowError(
-      /同じ名前/,
+      /same name/,
     );
   });
 
-  it("未知の server キーはエラーで、候補一覧を含む", () => {
+  it("an unknown server key is an error listing the available ones", () => {
     const dir = makeDir();
     writeFileSync(join(dir, "a.mcpt.yaml"), VALID_YAML.replace("weather", "wether"));
     try {
@@ -154,7 +154,7 @@ tests:
     }
   });
 
-  it("YAML 構文エラーはファイル名を含むエラー", () => {
+  it("a YAML syntax error names the file", () => {
     const dir = makeDir();
     writeFileSync(join(dir, "syntax.mcpt.yaml"), "server: [unclosed");
     expect(() => discoverTests({ cwd: dir, knownServers: [] })).toThrowError(
@@ -162,14 +162,14 @@ tests:
     );
   });
 
-  it("メソッド指定が無いテストはエラー", () => {
+  it("a test without a method is an error", () => {
     const dir = makeDir();
     writeFileSync(
       join(dir, "nomethod.mcpt.yaml"),
       `
 server: weather
 tests:
-  - name: 何もしない
+  - name: does nothing
 `,
     );
     expect(() => discoverTests({ cwd: dir, knownServers: ["weather"] })).toThrowError(

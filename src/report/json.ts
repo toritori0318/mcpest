@@ -1,5 +1,6 @@
 /**
- * JSON レポータ。機械可読な RunResult をそのまま出す（他ツール連携・自作ダッシュボード用）。
+ * JSON reporter: the machine-readable RunResult as-is, for integrating with
+ * other tools or custom dashboards.
  */
 import type { RunResult } from "./types.js";
 

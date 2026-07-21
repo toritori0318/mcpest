@@ -1,5 +1,5 @@
-// stdio トランスポートで fixtures サーバーを起動するエントリポイント。
-// 使い方: node fixtures/server/stdio.js
+// Entry point that starts the fixture server over the stdio transport.
+// Usage: node fixtures/server/stdio.js
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { buildServer } from "./build-server.js";
 

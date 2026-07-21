@@ -1,6 +1,7 @@
 /**
- * `mcpest init` — mcp.json（なければ）とサンプルテストを生成する。
- * 既存ファイルは上書きしない（init が破壊的だと安心して叩けないため）。
+ * `mcpest init` — generate mcp.json (when absent) and a sample test.
+ * Existing files are never overwritten (an init that can destroy files
+ * cannot be run with confidence).
  */
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -18,11 +19,11 @@ const DEFAULT_MCP_JSON = `{
 const EXAMPLE_TEST = `# mcpest test file. See https://github.com/toritori0318/mcpest
 server: my-server
 tests:
-  - name: ツール一覧が壊れていない
+  - name: tool list has not drifted
     tools/list:
       snapshot: true
 
-  # - name: ツールを呼んで検証する例
+  # - name: call a tool and verify the result
   #   tools/call:
   #     tool: my_tool
   #     args: { key: "value" }
@@ -38,14 +39,14 @@ export function initCommand(options: { cwd: string }): number {
   ];
   for (const [path, content] of targets) {
     if (existsSync(path)) {
-      process.stdout.write(`スキップ（既存）: ${path}\n`);
+      process.stdout.write(`skipped (exists): ${path}\n`);
       continue;
     }
     writeFileSync(path, content);
-    process.stdout.write(`作成: ${path}\n`);
+    process.stdout.write(`created: ${path}\n`);
   }
   process.stdout.write(
-    "\nmcp.json の my-server をあなたのサーバーに書き換えて `mcpest test` を実行してください\n",
+    "\nEdit my-server in mcp.json to point at your server, then run `mcpest test`\n",
   );
   return 0;
 }

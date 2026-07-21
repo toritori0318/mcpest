@@ -17,7 +17,7 @@ function runCli(args: string[], cwd: string) {
   const res = spawnSync(process.execPath, [cliPath, ...args], {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, CI: "" }, // CI 自動有効化をテストごとに制御するため既定は無効
+    env: { ...process.env, CI: "" }, // disable CI auto-enable so each test controls it
     timeout: 60_000,
   });
   return { code: res.status, stdout: res.stdout, stderr: res.stderr };
@@ -36,12 +36,12 @@ function setup(files: Record<string, string>): string {
 }
 
 describe("mcpest test", () => {
-  it("正常系で exit 0（受け入れ1）", () => {
+  it("exits 0 on the happy path (acceptance 1)", () => {
     const dir = setup({
       "ok.mcpt.yaml": `
 server: fx
 tests:
-  - name: 一覧
+  - name: list
     tools/list:
       snapshot: true
   - name: echo
@@ -55,12 +55,12 @@ tests:
     expect(res.stdout).toContain("passed");
   });
 
-  it("expect 不一致で exit 1、失敗パスが stdout に出る（受け入れ2）", () => {
+  it("exits 1 on an expect mismatch and prints the failure path (acceptance 2)", () => {
     const dir = setup({
       "ng.mcpt.yaml": `
 server: fx
 tests:
-  - name: 不一致
+  - name: mismatch
     tools/call:
       tool: echo
       args: { text: "actual" }
@@ -75,38 +75,38 @@ tests:
     expect(res.stdout).toContain("content");
   });
 
-  it("スナップショット: 生成 → 変更検知 → -u で更新（受け入れ3）", () => {
+  it("snapshots: create, detect change, then update with -u (acceptance 3)", () => {
     const dir = setup({
       "snap.mcpt.yaml": `
 server: fx
 tests:
-  - name: 一覧スナップショット
+  - name: list snapshot
     tools/list:
       snapshot: true
 `,
     });
-    // 初回: 生成されて exit 0
+    // First run: created, exit 0
     expect(runCli(["test"], dir).code).toBe(0);
     const snapPath = join(dir, "__mcpest_snapshots__", "snap.mcpt.yaml.snap.json");
     expect(existsSync(snapPath)).toBe(true);
 
-    // スナップショットを故意に書き換えて mismatch を作る
+    // Tamper with the snapshot to force a mismatch
     const snap = JSON.parse(readFileSync(snapPath, "utf8"));
-    snap["一覧スナップショット"].tools[0].description = "書き換えた";
+    snap["list snapshot"].tools[0].description = "tampered";
     writeFileSync(snapPath, JSON.stringify(snap));
     expect(runCli(["test"], dir).code).toBe(1);
 
-    // -u で更新されて exit 0 に戻る
+    // -u updates it and exit 0 returns
     expect(runCli(["test", "-u"], dir).code).toBe(0);
     expect(runCli(["test"], dir).code).toBe(0);
   }, 60_000);
 
-  it("CI=true かつスナップショット未存在で exit 1（受け入れ3後段）", () => {
+  it("exits 1 when CI=true and the snapshot is missing (acceptance 3, CI part)", () => {
     const dir = setup({
       "ci.mcpt.yaml": `
 server: fx
 tests:
-  - name: CI では未存在が失敗
+  - name: missing snapshot fails in CI
     tools/list:
       snapshot: true
 `,
@@ -120,14 +120,14 @@ tests:
     expect(res.status).toBe(1);
   });
 
-  it("不正 YAML は exit 2（受け入れ10）", () => {
+  it("exits 2 on invalid YAML (acceptance 10)", () => {
     const dir = setup({ "broken.mcpt.yaml": "server: [unclosed" });
     const res = runCli(["test"], dir);
     expect(res.code).toBe(2);
     expect(res.stderr).toContain("broken.mcpt.yaml");
   });
 
-  it("未知の server キーは exit 2 で候補一覧を出す（受け入れ10）", () => {
+  it("exits 2 on an unknown server key and lists the available ones (acceptance 10)", () => {
     const dir = setup({
       "unknown.mcpt.yaml": `
 server: nosuch
@@ -141,16 +141,16 @@ tests:
     expect(res.stderr).toContain("fx");
   });
 
-  it("--reporter junit --output で JUnit XML が生成され、件数が一致する（受け入れ8）", () => {
+  it("generates JUnit XML via --reporter junit --output with matching counts (acceptance 8)", () => {
     const dir = setup({
       "junit.mcpt.yaml": `
 server: fx
 tests:
-  - name: パスする
+  - name: passes
     tools/call:
       tool: echo
       args: { text: "a" }
-  - name: 失敗する
+  - name: fails
     tools/call:
       tool: echo
       args: { text: "b" }
@@ -164,33 +164,33 @@ tests:
     expect(xml).toContain('failures="1"');
   });
 
-  it("--grep でテストを絞り込める", () => {
+  it("--grep filters tests by name", () => {
     const dir = setup({
       "grep.mcpt.yaml": `
 server: fx
 tests:
-  - name: これは走る
+  - name: this one runs
     tools/call:
       tool: echo
       args: { text: "a" }
-  - name: 失敗するテスト（絞り込みの証明用）
+  - name: failing test (proves the filter works)
     tools/call:
       tool: echo
       args: { text: "b" }
       expect: { isError: true }
 `,
     });
-    // 絞り込みなし: 失敗するテストも走るので exit 1
+    // Without a filter, the failing test runs too: exit 1
     expect(runCli(["test"], dir).code).toBe(1);
-    // パスするテストだけに絞れば exit 0
-    expect(runCli(["test", "--grep", "これは走る"], dir).code).toBe(0);
-    // 失敗するテストだけに絞れば exit 1
-    expect(runCli(["test", "--grep", "失敗する"], dir).code).toBe(1);
+    // Filtered down to the passing test only: exit 0
+    expect(runCli(["test", "--grep", "this one runs"], dir).code).toBe(0);
+    // Filtered down to the failing test only: exit 1
+    expect(runCli(["test", "--grep", "failing"], dir).code).toBe(1);
   });
 });
 
-describe("mcpest call（受け入れ11）", () => {
-  it("結果 JSON を出力して exit 0", () => {
+describe("mcpest call (acceptance 11)", () => {
+  it("prints the result JSON and exits 0", () => {
     const dir = setup({});
     const res = runCli(["call", "fx", "echo", "--args", '{"text":"from cli"}'], dir);
     expect(res.code).toBe(0);
@@ -198,22 +198,22 @@ describe("mcpest call（受け入れ11）", () => {
     expect(parsed.content[0].text).toBe("from cli");
   });
 
-  it("isError:true でも exit 0（実行エラーは正常な観察結果）", () => {
+  it("exits 0 even for isError:true (an execution error is a valid observation)", () => {
     const dir = setup({});
     const res = runCli(["call", "fx", "failing_tool"], dir);
     expect(res.code).toBe(0);
     expect(JSON.parse(res.stdout).isError).toBe(true);
   });
 
-  it("未知ツールでも高レベル SDK サーバーは isError:true を返すので exit 0", () => {
-    // SDK の McpServer は未知ツールを JSON-RPC エラーでなくツール実行エラーに変換する
+  it("exits 0 for an unknown tool too — the high-level SDK server converts it to isError:true", () => {
+    // The SDK's McpServer turns unknown tools into tool execution errors, not JSON-RPC errors
     const dir = setup({});
     const res = runCli(["call", "fx", "no_such_tool"], dir);
     expect(res.code).toBe(0);
     expect(JSON.parse(res.stdout).isError).toBe(true);
   });
 
-  it("プロトコルエラー（低レベルサーバーが throw）は exit 1", () => {
+  it("exits 1 on a protocol error (a low-level server that throws)", () => {
     const dir = mkdtempSync(join(tmpdir(), "mcpest-cli-"));
     writeFileSync(
       join(dir, "mcp.json"),
@@ -221,12 +221,12 @@ describe("mcpest call（受け入れ11）", () => {
     );
     const res = runCli(["call", "bad", "no_such_tool"], dir);
     expect(res.code).toBe(1);
-    expect(res.stderr).toContain("JSON-RPC エラー");
+    expect(res.stderr).toContain("JSON-RPC error");
   });
 });
 
-describe("mcpest list（受け入れ13）", () => {
-  it("全ツールを表形式で出力して exit 0", () => {
+describe("mcpest list (acceptance 13)", () => {
+  it("prints every tool as a table and exits 0", () => {
     const dir = setup({});
     const res = runCli(["list"], dir);
     expect(res.code).toBe(0);
@@ -235,7 +235,7 @@ describe("mcpest list（受け入れ13）", () => {
     }
   });
 
-  it("接続失敗は exit 2", () => {
+  it("exits 2 on a connection failure", () => {
     const dir = mkdtempSync(join(tmpdir(), "mcpest-cli-"));
     writeFileSync(
       join(dir, "mcp.json"),
@@ -246,8 +246,8 @@ describe("mcpest list（受け入れ13）", () => {
   }, 30_000);
 });
 
-describe("mcpest init（受け入れ12）", () => {
-  it("非対話環境ではデフォルト値でファイル生成して exit 0", () => {
+describe("mcpest init (acceptance 12)", () => {
+  it("generates files with defaults in a non-interactive environment and exits 0", () => {
     const dir = mkdtempSync(join(tmpdir(), "mcpest-cli-"));
     const res = runCli(["init"], dir);
     expect(res.code).toBe(0);
@@ -255,7 +255,7 @@ describe("mcpest init（受け入れ12）", () => {
     expect(existsSync(join(dir, "example.mcpt.yaml"))).toBe(true);
   });
 
-  it("既存の mcp.json は上書きしない", () => {
+  it("never overwrites an existing mcp.json", () => {
     const dir = mkdtempSync(join(tmpdir(), "mcpest-cli-"));
     writeFileSync(join(dir, "mcp.json"), '{"mcpServers":{"keep":{"command":"x"}}}');
     const res = runCli(["init"], dir);

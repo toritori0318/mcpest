@@ -1,6 +1,7 @@
 /**
- * JUnit XML レポータ。CI（GitHub Actions / Jenkins 等）のテスト結果表示に食わせる用。
- * サーバー = testsuite、テスト = testcase に対応させる。
+ * JUnit XML reporter, for CI test-result views (GitHub Actions, Jenkins, etc.).
+ * Servers map to testsuite, tests to testcase, so CI screens show at a glance
+ * which server regressed.
  */
 import type { RunResult } from "./types.js";
 

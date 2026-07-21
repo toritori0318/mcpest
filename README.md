@@ -67,7 +67,7 @@ $ npx mcpest test
   ✓ tool list has not drifted (1ms)
   ✓ weather comes back structured (15ms)
   ✗ unknown location is a tool error (2ms)
-      isError: true を期待しましたが false でした
+      isError: expected true, received false
       Trace: .mcpest/traces/weather-1.jsonl
 
   Tests: 1 failed, 2 passed (3)  232ms

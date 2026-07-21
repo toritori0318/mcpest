@@ -1,9 +1,9 @@
-// Streamable HTTP トランスポートで fixtures サーバーを起動するエントリポイント。
-// 使い方: PORT=3901 node fixtures/server/http.js
-// MCPEST_FIXTURE_REQUIRE_AUTH=1 を設定すると `Authorization: Bearer test-token` ヘッダを要求し、
-// 無ければ 401 を返す（mcpest の headers 注入が実際に効いていることの検証用）。
-// ステートレスモード（リクエストごとに transport/server を生成）を採用。
-// セッション管理はここでは不要で、fixtures を最小に保つため。
+// Entry point that starts the fixture server over the Streamable HTTP transport.
+// Usage: PORT=3901 node fixtures/server/http.js
+// With MCPEST_FIXTURE_REQUIRE_AUTH=1 it requires an `Authorization: Bearer test-token`
+// header and returns 401 otherwise (proves that mcpest's header injection works).
+// Stateless mode (a fresh transport/server per request) keeps the fixture minimal;
+// session management is not needed here.
 import { createServer } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { buildServer } from "./build-server.js";
@@ -35,6 +35,6 @@ const httpServer = createServer(async (req, res) => {
 });
 
 httpServer.listen(port, "127.0.0.1", () => {
-  // テストコードが起動完了を検知するための行（stdout は MCP メッセージではないので自由に使える）
+  // Readiness line for test code (stdout is not an MCP channel here, so it's free to use)
   console.log(`mcpest-fixture-http listening on ${port}`);
 });

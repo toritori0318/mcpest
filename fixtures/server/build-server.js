@@ -1,5 +1,5 @@
-// mcpest の受け入れテストが対象とする標準 fixtures サーバー。
-// echo / get_weather(outputSchema あり) / failing_tool(isError) / slow_tool(3秒遅延) の 4 ツールを持つ。
+// The standard fixture server that mcpest's acceptance tests run against.
+// Four tools: echo / get_weather (with outputSchema) / failing_tool (isError) / slow_tool (3s delay).
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
@@ -29,7 +29,7 @@ export function buildServer() {
       },
     },
     async ({ location }) => {
-      if (location === "存在しない場所XYZ") {
+      if (location === "nowhere-xyz") {
         return {
           content: [{ type: "text", text: `location not found: ${location}` }],
           isError: true,

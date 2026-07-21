@@ -1,5 +1,6 @@
 /**
- * `mcpest list` — 接続して tools/list を表形式表示（name / title / 説明先頭 60 字）。
+ * `mcpest list` — connect and print tools/list as a table
+ * (name / title / first 60 chars of the description).
  */
 import { ListToolsResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { connect, ConnectionError } from "../client/connector.js";
@@ -66,7 +67,7 @@ export async function listCommand(options: ListCommandOptions): Promise<number> 
   const targets = options.server ? servers.filter((s) => s.name === options.server) : servers;
   if (targets.length === 0) {
     process.stderr.write(
-      `対象サーバーがありません。利用可能: ${servers.map((s) => s.name).join(", ")}\n`,
+      `no matching server. Available: ${servers.map((s) => s.name).join(", ")}\n`,
     );
     return 2;
   }
