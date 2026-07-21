@@ -10,7 +10,7 @@ import { testCommand } from "./commands/test.js";
 
 const program = new Command();
 
-program.name("mcpest").description("A delightful test runner for MCP servers").version("0.0.1");
+program.name("mcpest").description("A delightful test runner for MCP servers").version("0.1.0");
 
 program
   .command("test", { isDefault: true })

@@ -15,7 +15,7 @@ const DEFAULT_MCP_JSON = `{
 }
 `;
 
-const EXAMPLE_TEST = `# mcpest のテストファイル。詳しくは https://github.com/<owner>/mcpest を参照
+const EXAMPLE_TEST = `# mcpest test file. See https://github.com/toritori0318/mcpest
 server: my-server
 tests:
   - name: ツール一覧が壊れていない

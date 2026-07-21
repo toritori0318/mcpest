@@ -1,9 +1,18 @@
 {
   "name": "mcpest",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "A delightful test runner for MCP (Model Context Protocol) servers — declarative YAML tests, schema validation, and snapshot-based drift detection",
   "type": "module",
   "license": "MIT",
+  "author": "toritori0318",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/toritori0318/mcpest.git"
+  },
+  "homepage": "https://github.com/toritori0318/mcpest#readme",
+  "bugs": {
+    "url": "https://github.com/toritori0318/mcpest/issues"
+  },
   "bin": {
     "mcpest": "./dist/cli.js"
   },
@@ -16,6 +25,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
