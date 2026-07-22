@@ -16,7 +16,7 @@ import { evaluate } from "../assert/matchers.js";
 import { checkSchema } from "../assert/schema-check.js";
 import { SnapshotStore } from "../assert/snapshot.js";
 import { connect, ConnectionError, type Connection } from "../client/connector.js";
-import { loadConfig, type ServerConfig } from "../config/loader.js";
+import { ConfigError, loadConfig, type ServerConfig } from "../config/loader.js";
 import { discoverTests, type TestCase, type TestFile } from "../discovery.js";
 import type {
   RunResult,
@@ -276,6 +276,10 @@ async function runServer(
   }
 
   const results: TestResult[] = [];
+  // Tracks position in allTests independent of results.length: a --grep skip
+  // advances the cursor without pushing a result, so results.length alone
+  // would misattribute an uncaught exception to the wrong test.
+  let cursor = 0;
   try {
     const tools = await fetchAllTools(connection);
 
@@ -285,6 +289,7 @@ async function runServer(
         ci: options.ci ?? false,
       });
       for (const test of file.tests) {
+        cursor++;
         if (options.grep && !test.name.includes(options.grep)) continue;
 
         const result: TestResult = await runSingleTest(test, connection, tools, snapshots);
@@ -310,7 +315,7 @@ async function runServer(
     }
   } catch (error) {
     results.push({
-      test: allTests[results.length] ?? allTests[0]!,
+      test: allTests[cursor - 1] ?? allTests[0]!,
       status: "error",
       durationMs: 0,
       failures: [{ path: "", message: String(error) }],
@@ -363,7 +368,34 @@ export async function runSuite(options: RunOptions): Promise<RunResult> {
     knownServers: servers.map((s) => s.name),
   });
 
+  if (options.server && !servers.some((s) => s.name === options.server)) {
+    throw new ConfigError(
+      `server "${options.server}" not found in config. Available: ${servers.map((s) => s.name).join(", ")}`,
+    );
+  }
+
   const targetFiles = options.server ? files.filter((f) => f.server === options.server) : files;
+
+  // A --server typo or a --grep that matches nothing would otherwise run 0
+  // tests and report `ok: true` — indistinguishable in CI from "everything
+  // passed". Treat it as a config error instead of a silent success.
+  const matchedTestCount = targetFiles
+    .flatMap((f) => f.tests)
+    .filter((t) => !options.grep || t.name.includes(options.grep)).length;
+  if (matchedTestCount === 0) {
+    const selector = [
+      options.server ? `server "${options.server}"` : undefined,
+      options.grep ? `--grep "${options.grep}"` : undefined,
+    ]
+      .filter(Boolean)
+      .join(" and ");
+    throw new ConfigError(
+      selector
+        ? `no tests matched (${selector}); ${targetFiles.length} test file(s) were discovered`
+        : `no tests were discovered (looked for **/*.mcpt.yaml)`,
+    );
+  }
+
   const byServer = new Map<string, TestFile[]>();
   for (const file of targetFiles) {
     byServer.set(file.server, [...(byServer.get(file.server) ?? []), file]);

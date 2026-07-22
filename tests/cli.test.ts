@@ -164,6 +164,48 @@ tests:
     expect(xml).toContain('failures="1"');
   });
 
+  it("exits 2 on --server naming an unknown server, not a silent 0-test pass (acceptance 10)", () => {
+    const dir = setup({
+      "basic.mcpt.yaml": `
+server: fx
+tests:
+  - name: list
+    tools/list: {}
+`,
+    });
+    const res = runCli(["test", "--server", "nosuch"], dir);
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain("fx");
+  });
+
+  it("exits 2 when --grep matches zero tests, not a silent 0-test pass", () => {
+    const dir = setup({
+      "basic.mcpt.yaml": `
+server: fx
+tests:
+  - name: list
+    tools/list: {}
+`,
+    });
+    const res = runCli(["test", "--grep", "no-such-test-name"], dir);
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain("no-such-test-name");
+  });
+
+  it("rejects an invalid --trace value before running", () => {
+    const dir = setup({
+      "basic.mcpt.yaml": `
+server: fx
+tests:
+  - name: list
+    tools/list: {}
+`,
+    });
+    const res = runCli(["test", "--trace", "bogus"], dir);
+    expect(res.code).not.toBe(0);
+    expect(res.stderr).toContain("trace");
+  });
+
   it("--grep filters tests by name", () => {
     const dir = setup({
       "grep.mcpt.yaml": `

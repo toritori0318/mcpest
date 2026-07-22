@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
+import { ConfigError } from "../src/config/loader.js";
 import { runSuite } from "../src/runner/runner.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -335,6 +336,42 @@ tests:
     const trace = readFileSync(result.servers[0]!.results[0]!.tracePath!, "utf8");
     expect(trace).not.toContain("topsecret123");
     expect(trace).toContain("***");
+  });
+});
+
+describe("test selection guards against silent no-ops", () => {
+  it("--server naming an unknown server is a config error, not a silent 0-test pass", async () => {
+    const dir = setup(
+      {
+        "basic.mcpt.yaml": `
+server: fx
+tests:
+  - name: list
+    tools/list: {}
+`,
+      },
+      { fx: stdioServer },
+    );
+    await expect(runSuite({ cwd: dir, server: "nosuch" })).rejects.toThrow(ConfigError);
+    await expect(runSuite({ cwd: dir, server: "nosuch" })).rejects.toThrow(/fx/);
+  });
+
+  it("--grep matching zero tests is a config error, not a silent 0-test pass", async () => {
+    const dir = setup(
+      {
+        "basic.mcpt.yaml": `
+server: fx
+tests:
+  - name: list
+    tools/list: {}
+`,
+      },
+      { fx: stdioServer },
+    );
+    await expect(runSuite({ cwd: dir, grep: "no-such-test-name" })).rejects.toThrow(ConfigError);
+    await expect(runSuite({ cwd: dir, grep: "no-such-test-name" })).rejects.toThrow(
+      /no-such-test-name/,
+    );
   });
 });
 

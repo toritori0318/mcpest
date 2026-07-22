@@ -3,7 +3,6 @@
 **A delightful test runner for MCP servers.**
 
 [![CI](https://github.com/toritori0318/mcpest/actions/workflows/ci.yml/badge.svg)](https://github.com/toritori0318/mcpest/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/mcpest)](https://www.npmjs.com/package/mcpest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Declarative YAML tests + snapshot-based drift detection for [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) servers. Point it at your existing `mcp.json` and run assertions against `tools/list` / `tools/call` in CI.
@@ -95,6 +94,17 @@ Exit codes: `0` all passed / `1` test failures / `2` config or connection errors
 ```
 
 With `CI=true`, a missing snapshot is treated as a failure (generate locally and commit it).
+
+### Programmatic API
+
+```ts
+import { runSuite } from "mcpest";
+
+const result = await runSuite({ cwd: process.cwd() });
+if (!result.ok) throw new Error("mcpest suite failed");
+```
+
+Also exported: `loadConfig`, `discoverTests`, `evaluate`, and their `ConfigError` / `DiscoveryError` types.
 
 ## Development
 

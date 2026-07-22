@@ -3,7 +3,7 @@
  * CLI entry point. Only command definitions and argument parsing live here;
  * logic belongs in commands/*.
  */
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import { callCommand } from "./commands/call.js";
 import { initCommand } from "./commands/init.js";
 import { listCommand } from "./commands/list.js";
@@ -24,7 +24,11 @@ program
   .option("--output <path>", "output file for junit / json reporters")
   .option("-u, --update-snapshots", "update snapshots with the current results")
   .option("--ci", "CI mode (missing snapshot = failure); auto-enabled when CI=true")
-  .option("--trace <mode>", "off | on | retain-on-failure", "retain-on-failure")
+  .addOption(
+    new Option("--trace <mode>", "off | on | retain-on-failure")
+      .choices(["off", "on", "retain-on-failure"])
+      .default("retain-on-failure"),
+  )
   .option("--bail", "stop at the first failure")
   .action(async (globs: string[], opts) => {
     const code = await testCommand({

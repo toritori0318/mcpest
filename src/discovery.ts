@@ -41,6 +41,27 @@ export interface DiscoverOptions {
 const DEFAULT_TIMEOUT_MS = 30_000;
 const METHODS = ["tools/list", "tools/call"] as const;
 
+// Allow-lists exist so a typo (e.g. "exepct") is a discovery-time error
+// instead of a silently-ignored key that quietly weakens the test.
+const FILE_KEYS = new Set(["server", "timeout", "tests"]);
+const TEST_KEYS = new Set(["name", "timeout", "tools/list", "tools/call"]);
+const SPEC_KEYS: Record<(typeof METHODS)[number], Set<string>> = {
+  "tools/list": new Set(["expect", "snapshot"]),
+  "tools/call": new Set(["tool", "args", "expect", "validateInput", "validateOutput", "snapshot"]),
+};
+
+function rejectUnknownKeys(
+  file: string,
+  obj: Record<string, unknown>,
+  allowed: Set<string>,
+  where: string,
+): void {
+  const unknown = Object.keys(obj).filter((k) => !allowed.has(k));
+  if (unknown.length > 0) {
+    fail(file, `${where}: unknown key(s): ${unknown.join(", ")}`);
+  }
+}
+
 function fail(file: string, message: string): never {
   throw new DiscoveryError(`${file}: ${message}`);
 }
@@ -60,6 +81,7 @@ function normalizeTest(
   if (typeof name !== "string" || name === "") {
     fail(file, `tests[${index}] is missing name`);
   }
+  rejectUnknownKeys(file, raw, TEST_KEYS, `test "${name}"`);
 
   const methodsPresent = METHODS.filter((m) => m in raw);
   if (methodsPresent.length === 0) {
@@ -74,6 +96,7 @@ function normalizeTest(
     fail(file, `test "${name}": the value of ${method} must be an object`);
   }
   const spec = (body ?? {}) as Record<string, unknown>;
+  rejectUnknownKeys(file, spec, SPEC_KEYS[method], `test "${name}": ${method}`);
 
   let tool: string | undefined;
   if (method === "tools/call") {
@@ -81,6 +104,15 @@ function normalizeTest(
       fail(file, `test "${name}": tools/call requires tool (the tool name)`);
     }
     tool = spec["tool"];
+  }
+
+  if (method === "tools/list" && isPlainObject(spec["expect"]) && "error" in spec["expect"]) {
+    // tools/list is fetched once up front and reused across tests, so there is
+    // no per-test protocol call whose error a tools/list test could match on.
+    fail(
+      file,
+      `test "${name}": expect.error is only valid for tools/call (tools/list has no per-test protocol call to fail)`,
+    );
   }
 
   const args = spec["args"] ?? {};
@@ -115,6 +147,7 @@ function parseTestFile(path: string, knownServers: string[]): TestFile {
     fail(path, `YAML parse failed: ${String(error)}`);
   }
   if (!isPlainObject(doc)) fail(path, "the top level must be an object");
+  rejectUnknownKeys(path, doc, FILE_KEYS, "top level");
 
   const server = doc["server"];
   if (typeof server !== "string" || server === "") {

@@ -93,3 +93,16 @@ scenarios as you go. `[x]` = turned into a test and green.
 
 - [ ] a 10-test fixture suite finishes within 10 seconds (no automated measurement yet; the current 16-test integration suite completes in ~7s)
 - [x] env values are masked as `***` in reports and traces
+
+## T14: self-review hardening (typo / silent-success traps)
+
+- [x] discovery: an unknown top-level file key is an error naming the key
+- [x] discovery: an unknown test-level key is an error naming the key
+- [x] discovery: an unknown key inside `tools/call` is an error naming the key
+- [x] discovery: an unknown key inside `tools/list` is an error naming the key
+- [x] discovery: `expect.error` on `tools/list` is an error (tools/list has no per-test protocol call to fail)
+- [x] runner: `--server <unknown>` is a config error (exit 2), not a silent 0-test success
+- [x] runner: `--grep <pattern>` matching zero tests is an error (exit 2), not a silent 0-test success
+- [x] cli: `--trace <invalid>` is rejected by commander before running (exit != 0)
+- [ ] runner: an uncaught non-protocol exception mid-suite attributes to the correct test even when earlier tests were skipped by `--grep` (fixed via a cursor counter; no reliable fixture reproduces the underlying exception path without flakiness, so left as a manual-reasoning fix rather than a regression test)
+- [x] programmatic API: `src/index.ts` exports `runSuite`/`loadConfig`/`discoverTests`/`evaluate` and `package.json#main` resolves to a real build output

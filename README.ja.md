@@ -76,6 +76,17 @@ exit code: `0` 全パス / `1` テスト失敗 / `2` 設定・接続エラー。
 
 `CI=true` ではスナップショット未存在を失敗として扱います（ローカルで生成してコミットしてください）。
 
+### プログラマティック API
+
+```ts
+import { runSuite } from "mcpest";
+
+const result = await runSuite({ cwd: process.cwd() });
+if (!result.ok) throw new Error("mcpest suite failed");
+```
+
+`loadConfig` / `discoverTests` / `evaluate` と、それぞれの `ConfigError` / `DiscoveryError` 型もエクスポートしています。
+
 ## 開発
 
 ```console

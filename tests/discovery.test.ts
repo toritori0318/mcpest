@@ -176,4 +176,93 @@ tests:
       DiscoveryError,
     );
   });
+
+  it("an unknown top-level file key is an error naming the key (typo protection)", () => {
+    const dir = makeDir();
+    writeFileSync(
+      join(dir, "typo.mcpt.yaml"),
+      `
+server: weather
+descrption: oops
+tests:
+  - name: t
+    tools/list: {}
+`,
+    );
+    expect(() => discoverTests({ cwd: dir, knownServers: ["weather"] })).toThrowError(
+      /descrption/,
+    );
+  });
+
+  it("an unknown test-level key is an error naming the key (typo protection)", () => {
+    const dir = makeDir();
+    writeFileSync(
+      join(dir, "typo.mcpt.yaml"),
+      `
+server: weather
+tests:
+  - name: t
+    tiemout: 1000
+    tools/list: {}
+`,
+    );
+    expect(() => discoverTests({ cwd: dir, knownServers: ["weather"] })).toThrowError(
+      /tiemout/,
+    );
+  });
+
+  it("an unknown key inside tools/call is an error naming the key (typo protection)", () => {
+    const dir = makeDir();
+    writeFileSync(
+      join(dir, "typo.mcpt.yaml"),
+      `
+server: weather
+tests:
+  - name: t
+    tools/call:
+      tool: echo
+      args: { text: hi }
+      exepct: { isError: false }
+`,
+    );
+    expect(() => discoverTests({ cwd: dir, knownServers: ["weather"] })).toThrowError(
+      /exepct/,
+    );
+  });
+
+  it("an unknown key inside tools/list is an error naming the key (typo protection)", () => {
+    const dir = makeDir();
+    writeFileSync(
+      join(dir, "typo.mcpt.yaml"),
+      `
+server: weather
+tests:
+  - name: t
+    tools/list:
+      snapshot: true
+      tool: not-allowed-here
+`,
+    );
+    expect(() => discoverTests({ cwd: dir, knownServers: ["weather"] })).toThrowError(
+      /tool/,
+    );
+  });
+
+  it("expect.error on tools/list is an error (tools/list has no per-test protocol call to fail)", () => {
+    const dir = makeDir();
+    writeFileSync(
+      join(dir, "badexpect.mcpt.yaml"),
+      `
+server: weather
+tests:
+  - name: t
+    tools/list:
+      expect:
+        error: { code: -32601 }
+`,
+    );
+    expect(() => discoverTests({ cwd: dir, knownServers: ["weather"] })).toThrowError(
+      /expect\.error/,
+    );
+  });
 });
